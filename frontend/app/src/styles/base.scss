@@ -1,0 +1,58 @@
+.page-wraper {
+  min-height: calc(100vh - var(--window-top));
+  box-sizing: border-box;
+  background: var(--drop-bg);
+}
+
+/* tab 页（tabbar 布局专属）：内容区再扣掉底部 tabbar 高度，避免 min-height 撑满与底部占位 gap 叠加溢出 */
+.tabbar-page > .page-wraper {
+  min-height: calc(100vh - var(--window-top) - var(--tabbar-h, 50px));
+}
+
+/* 中景亮斑呼吸层已移除：
+   ::before 伪元素 top/bottom:-20% 溢出容器 + z-index:-1 + 半透明渐变，
+   在容器边界外（tabbar 与内容区之间）叠出深色带/黑条。
+   若需恢复光晕效果，应改为伪元素 inset:0 不溢出，并给容器加 overflow:hidden 裁剪 */
+/* 暗色模式：保持纯色背景，避免渐变在深色背景下突兀 */
+.wot-theme-dark {
+  /* tabbar 背景跟随暗色页面背景，避免与内容区断层 */
+  --wot-tabbar-bg: var(--wot-filled-content);
+}
+
+.wot-theme-dark.page-wraper,
+.wot-theme-dark .page-wraper,
+.wot-theme-dark .tabbar-wraper,
+.wot-theme-dark .tabbar-gap {
+  background: var(--wot-filled-content);
+}
+
+/* 用户信息卡（index/work/mine 共用）：品牌渐变跟随主题色 + 极光装饰圆环 */
+.user-info-card {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--wot-primary-6), var(--wot-primary-4));
+  box-shadow: 0 8rpx 24rpx rgba(15, 23, 42, 0.18);
+
+  /* 右上角装饰圆环 */
+  &::before {
+    content: '';
+    position: absolute;
+    right: -60rpx;
+    top: -70rpx;
+    width: 220rpx;
+    height: 220rpx;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    right: 60rpx;
+    bottom: -90rpx;
+    width: 160rpx;
+    height: 160rpx;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+  }
+}

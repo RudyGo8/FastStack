@@ -1,0 +1,22 @@
+# 单包项目，无子包；必须声明 packages，否则 pnpm 报 "packages field missing or empty"
+packages: []
+
+# pnpm 11.5+ 的 build 白名单（map 形式，取代旧 onlyBuiltDependencies 数组）
+allowBuilds:
+  '@parcel/watcher': true
+  '@uni-helper/unocss-preset-uni': true
+  core-js: true
+  core-js-pure: true
+  esbuild: true
+  vue-demi: true
+
+# pnpm 11+ 配置中心（.npmrc 仅保留 auth/registry；package.json 的 pnpm 字段已废弃）
+# 从 package.json#pnpm 与 .npmrc 迁移而来，勿改回旧位置
+
+# 依赖版本覆盖（原 package.json#pnpm.overrides）
+overrides:
+  # vue-i18n@9.14.5 的 core-base/message-compiler 依赖需要 9.14.5 的 @intlify/*；
+  # 但公共提升区混有 uni 工具链内置的 9.1.9，H5 按 symlink 路径解析会命中旧版（缺 join/CompileWarnCodes 等导出），统一版本解决
+  '@intlify/message-compiler': 9.14.5
+  '@intlify/shared': 9.14.5
+  unconfig: 7.3.2

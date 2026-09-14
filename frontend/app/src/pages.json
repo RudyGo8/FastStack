@@ -1,0 +1,203 @@
+{
+  "globalStyle": {
+    "navigationBarBackgroundColor": "@navBgColor",
+    "navigationBarTextStyle": "@navTxtStyle",
+    "navigationBarTitleText": "FastapiAdmin",
+    "backgroundColor": "@bgColor",
+    "backgroundTextStyle": "@bgTxtStyle",
+    "backgroundColorTop": "@bgColorTop",
+    "backgroundColorBottom": "@bgColorBottom",
+    "enablePullDownRefresh": false,
+    "onReachBottomDistance": 50,
+    "animationType": "pop-in",
+    "animationDuration": 300
+  },
+  "pages": [
+    // #ifdef APP
+    {
+      "path": "pages/index/index",
+      "type": "home",
+      "name": "home",
+      "layout": "tabbar",
+      "style": {
+        "navigationBarTitleText": "首页"
+      }
+    },
+    // #endif
+    // #ifdef H5 || MP-WEIXIN
+    {
+      "path": "pages/index/index",
+      "type": "home",
+      "name": "home",
+      "layout": "tabbar",
+      "style": {
+        "navigationBarTitleText": "工作台概览"
+      }
+    },
+    // #endif
+    // #ifdef APP
+    {
+      "path": "pages/about/index",
+      "type": "page",
+      "name": "about",
+      "layout": "tabbar",
+      "style": {
+        "navigationBarTitleText": "关于"
+      }
+    },
+    // #endif
+    {
+      "path": "pages/login/index",
+      "type": "page",
+      "name": "login",
+      "style": {
+        "navigationBarTitleText": "登录"
+      }
+    },
+    {
+      "path": "pages/mine/index",
+      "type": "page",
+      "name": "mine",
+      "layout": "tabbar",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
+    },
+    {
+      "path": "pages/work/index",
+      "type": "page",
+      "name": "work",
+      "layout": "tabbar",
+      "style": {
+        "navigationBarTitleText": "工作台"
+      }
+    },
+    {
+      "path": "pages/login/forget/index",
+      "type": "page",
+      "name": "forget",
+      "style": {
+        "navigationBarTitleText": "忘记密码"
+      }
+    },
+    {
+      "path": "pages/login/register/index",
+      "type": "page",
+      "name": "register",
+      "style": {
+        "navigationBarTitleText": "注册"
+      }
+    }
+  ],
+  "subPackages": [
+    {
+      "root": "subPages",
+      "pages": [
+        // #ifdef H5 || MP-WEIXIN
+        {
+          "path": "about/index",
+          "type": "page",
+          "name": "about",
+          "style": {
+            "navigationBarTitleText": "关于"
+          }
+        },
+        // #endif
+        // #ifdef H5 || MP-WEIXIN
+        {
+          "path": "setting/index",
+          "type": "page",
+          "name": "setting",
+          "layout": "default",
+          "style": {
+            "navigationBarTitleText": "设置"
+          }
+        },
+        // #endif
+        // #ifdef H5 || MP-WEIXIN
+        {
+          "path": "module_ai/chat/index",
+          "type": "page",
+          "name": "work-chat",
+          "style": {
+            "navigationBarTitleText": "AI 助手"
+          }
+        },
+        // #endif
+        // #ifdef H5 || MP-WEIXIN
+        {
+          "path": "module_system/profile/index",
+          "type": "page",
+          "name": "profile",
+          "layout": "default",
+          "style": {
+            "navigationBarTitleText": "个人资料"
+          }
+        },
+        // #endif
+        {
+          "path": "module_ai/ai-models/index",
+          "type": "page",
+          "name": "work-ai-models",
+          "style": {
+            "navigationBarTitleText": "AI 模型配置",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "module_system/notices/index",
+          "type": "page",
+          "name": "work-notices",
+          "style": {
+            "navigationBarTitleText": "通知公告",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "module_system/ticket-detail/index",
+          "type": "page",
+          "name": "work-ticket-detail",
+          "style": {
+            "navigationBarTitleText": "工单详情",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "module_system/tickets/index",
+          "type": "page",
+          "name": "work-tickets",
+          "style": {
+            "navigationBarTitleText": "工单管理",
+            "enablePullDownRefresh": true
+          }
+        }
+      ]
+    }
+  ],
+  "tabBar": {
+    "custom": true,
+    "height": "0",
+    "color": "@tabColor",
+    "selectedColor": "@tabSelectedColor",
+    "backgroundColor": "@tabBgColor",
+    "borderStyle": "@tabBorderStyle",
+    "list": [
+      // #ifdef APP || H5 || MP-WEIXIN
+      {
+        "pagePath": "pages/index/index"
+      },
+      // #endif
+      // #ifdef APP
+      {
+        "pagePath": "pages/about/index"
+      },
+      // #endif
+      {
+        "pagePath": "pages/work/index"
+      },
+      {
+        "pagePath": "pages/mine/index"
+      }
+    ]
+  }
+}

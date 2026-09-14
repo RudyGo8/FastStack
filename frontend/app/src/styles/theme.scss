@@ -1,0 +1,131 @@
+/* ===== 玻璃水滴全屏渐变（按主题色自动换肤，三层层次感） =====
+   默认（蓝色）渐变变量定义在主题根节点 .wot-theme-light 上，
+   页面容器 .page-wraper/.tabbar-wraper 作为后代继承，随主题色 class 变化而换肤
+   层次结构：远景大色晕 → 中景小亮斑（玻璃反光） → 基底多段线性渐变 */
+.wot-theme-light {
+  --drop-pos-a: 18% 6%;
+  --drop-pos-b: 88% 10%;
+  --drop-pos-c: 82% 74%;
+  --drop-pos-d: 10% 84%;
+  --drop-blob-a: rgba(28, 100, 253, 0.2);
+  --drop-blob-b: rgba(125, 211, 252, 0.18);
+  --drop-blob-c: rgba(124, 164, 255, 0.16);
+  --drop-blob-d: rgba(68, 128, 255, 0.12);
+  --drop-glow-a: rgba(147, 197, 253, 0.22);
+  --drop-glow-b: rgba(125, 211, 252, 0.18);
+  --drop-base-a: #E3F1FF;
+  --drop-base-b: #EBF7FF;
+  --drop-base-c: #F2FAFF;
+  --drop-base-d: #F0F2FF;
+  --drop-base-e: #EDEFFF;
+  --drop-base-f: #F9F7FF;
+  /* tabbar 背景跟随渐变最底部色，与页面底部无缝衔接 */
+  --wot-tabbar-bg: var(--drop-base-f);
+  /* 静态层背景（远景色晕 + 基底渐变），页面容器与登录页共用；亮斑层走 ::before 呼吸动效 */
+  --drop-bg:
+    radial-gradient(circle at var(--drop-pos-a), var(--drop-blob-a) 0%, transparent 50%),
+    radial-gradient(circle at var(--drop-pos-b), var(--drop-blob-b) 0%, transparent 46%),
+    radial-gradient(circle at var(--drop-pos-c), var(--drop-blob-c) 0%, transparent 50%),
+    radial-gradient(circle at var(--drop-pos-d), var(--drop-blob-d) 0%, transparent 46%),
+    linear-gradient(160deg, var(--drop-base-a) 0%, var(--drop-base-b) 22%, var(--drop-base-c) 45%, var(--drop-base-d) 68%, var(--drop-base-e) 88%, var(--drop-base-f) 100%);
+}
+
+/* 橙色：暖阳琥珀 */
+.theme-orange {
+  --drop-pos-a: 22% 4%;
+  --drop-pos-b: 84% 14%;
+  --drop-pos-c: 78% 78%;
+  --drop-pos-d: 14% 80%;
+  --drop-blob-a: rgba(255, 125, 0, 0.18);
+  --drop-blob-b: rgba(255, 179, 110, 0.16);
+  --drop-blob-c: rgba(255, 147, 56, 0.15);
+  --drop-blob-d: rgba(217, 104, 0, 0.12);
+  --drop-glow-a: rgba(255, 209, 178, 0.25);
+  --drop-glow-b: rgba(255, 147, 56, 0.18);
+  --drop-base-a: #FFF4E7;
+  --drop-base-b: #FFF8F0;
+  --drop-base-c: #FFFBF6;
+  --drop-base-d: #FFF6EC;
+  --drop-base-e: #FFF2E8;
+  --drop-base-f: #FFFCF9;
+}
+
+/* 绿色：清泉薄荷 */
+.theme-green {
+  --drop-pos-a: 16% 8%;
+  --drop-pos-b: 90% 6%;
+  --drop-pos-c: 76% 70%;
+  --drop-pos-d: 8% 88%;
+  --drop-blob-a: rgba(7, 193, 96, 0.16);
+  --drop-blob-b: rgba(127, 226, 175, 0.16);
+  --drop-blob-c: rgba(66, 210, 138, 0.14);
+  --drop-blob-d: rgba(4, 159, 79, 0.12);
+  --drop-glow-a: rgba(167, 243, 208, 0.24);
+  --drop-glow-b: rgba(66, 210, 138, 0.18);
+  --drop-base-a: #EAF9F1;
+  --drop-base-b: #F0FBF5;
+  --drop-base-c: #F5FDF8;
+  --drop-base-d: #EDF9F3;
+  --drop-base-e: #E8F6EF;
+  --drop-base-f: #FAFDFB;
+}
+
+/* 粉色：樱花莓果 */
+.theme-pink {
+  --drop-pos-a: 24% 6%;
+  --drop-pos-b: 80% 12%;
+  --drop-pos-c: 86% 76%;
+  --drop-pos-d: 12% 82%;
+  --drop-blob-a: rgba(255, 105, 180, 0.18);
+  --drop-blob-b: rgba(255, 153, 209, 0.16);
+  --drop-blob-c: rgba(255, 127, 194, 0.15);
+  --drop-blob-d: rgba(232, 78, 159, 0.12);
+  --drop-glow-a: rgba(255, 194, 224, 0.24);
+  --drop-glow-b: rgba(255, 127, 194, 0.18);
+  --drop-base-a: #FFF0F7;
+  --drop-base-b: #FFF5FA;
+  --drop-base-c: #FFF9FC;
+  --drop-base-d: #FEF2F8;
+  --drop-base-e: #FDEFF5;
+  --drop-base-f: #FFFCFE;
+}
+
+/* 紫色：紫罗兰晨雾 */
+.theme-purple {
+  --drop-pos-a: 14% 5%;
+  --drop-pos-b: 92% 12%;
+  --drop-pos-c: 80% 72%;
+  --drop-pos-d: 6% 86%;
+  --drop-blob-a: rgba(138, 43, 226, 0.16);
+  --drop-blob-b: rgba(188, 141, 255, 0.16);
+  --drop-blob-c: rgba(160, 94, 255, 0.14);
+  --drop-blob-d: rgba(116, 35, 191, 0.12);
+  --drop-glow-a: rgba(196, 181, 253, 0.24);
+  --drop-glow-b: rgba(160, 94, 255, 0.18);
+  --drop-base-a: #F3EEFF;
+  --drop-base-b: #F7F3FF;
+  --drop-base-c: #FAF7FF;
+  --drop-base-d: #F3F0FF;
+  --drop-base-e: #EFEBFF;
+  --drop-base-f: #FDFBFF;
+}
+
+/* 红色：烈焰玫瑰 */
+.theme-red {
+  --drop-pos-a: 20% 7%;
+  --drop-pos-b: 86% 8%;
+  --drop-pos-c: 84% 78%;
+  --drop-pos-d: 10% 84%;
+  --drop-blob-a: rgba(255, 71, 87, 0.16);
+  --drop-blob-b: rgba(255, 144, 154, 0.16);
+  --drop-blob-c: rgba(255, 102, 114, 0.14);
+  --drop-blob-d: rgba(219, 52, 69, 0.12);
+  --drop-glow-a: rgba(255, 183, 190, 0.24);
+  --drop-glow-b: rgba(255, 102, 114, 0.18);
+  --drop-base-a: #FFF0F1;
+  --drop-base-b: #FFF5F5;
+  --drop-base-c: #FFF9F9;
+  --drop-base-d: #FEF2F3;
+  --drop-base-e: #FCEEEF;
+  --drop-base-f: #FFFCFC;
+}
