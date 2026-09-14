@@ -31,6 +31,40 @@ export const setPageTitle = (to: RouteLocationNormalized): void => {
   document.title = `${formatMenuTitle(String(title))} - ${siteName}`;
 };
 
+/** 后端菜单中文名 → i18n key 映射（可见菜单项，不含按钮权限） */
+const MENU_CN_MAP: Record<string, string> = {
+  "系统管理": "menuNames.system",
+  "监控管理": "menuNames.monitor",
+  "接口管理": "menuNames.api",
+  "代码管理": "menuNames.code",
+  "AI管理": "menuNames.ai",
+  "任务管理": "menuNames.task",
+  "菜单管理": "menuNames.menuMgmt",
+  "字典管理": "menuNames.dict",
+  "参数管理": "menuNames.param",
+  "部门管理": "menuNames.dept",
+  "岗位管理": "menuNames.post",
+  "角色管理": "menuNames.role",
+  "用户管理": "menuNames.user",
+  "日志管理": "menuNames.log",
+  "公告管理": "menuNames.notice",
+  "工单管理": "menuNames.ticket",
+  "版本管理": "menuNames.version",
+  "在线用户": "menuNames.onlineUsers",
+  "服务器监控": "menuNames.serverMonitor",
+  "缓存监控": "menuNames.cacheMonitor",
+  "Swagger文档": "menuNames.swagger",
+  "代码生成": "menuNames.codeGen",
+  "AI智能助手": "menuNames.aiChat",
+  "会话记忆": "menuNames.aiMemory",
+  "定时任务": "menuNames.cron",
+  "存储管理": "menuNames.storage",
+  "同事": "menuNames.colleague",
+  "打卡": "menuNames.checkin",
+  "消息": "menuNames.message",
+  "我的": "menuNames.profile",
+};
+
 export const formatMenuTitle = (title: string): string => {
   if (!title) return "";
 
@@ -38,6 +72,10 @@ export const formatMenuTitle = (title: string): string => {
     if (i18n.global.te(title)) return $t(title);
     return title.split(".").pop() || title;
   }
+
+  // 后端菜单返回中文名，查映射表翻译
+  const key = MENU_CN_MAP[title];
+  if (key && i18n.global.te(key)) return $t(key);
 
   return title;
 };

@@ -545,7 +545,8 @@ export const useWorktabStore = defineStore(
       // 旧会话的 KeepAlive 缓存实例必须驱逐：
       // opened 清空后 include 会变为 undefined（KeepAlive 对 undefined include 不做 prune），
       // 旧实例会带着 WebSocket / 定时器等副作用跨会话存活。
-      const removedTabs = fixedTabs.length > 0 ? opened.value.filter((tab) => !tab.fixedTab) : opened.value;
+      const removedTabs =
+        fixedTabs.length > 0 ? opened.value.filter((tab) => !tab.fixedTab) : opened.value;
       const excludeNames = new Set<string>();
       for (const tab of removedTabs) {
         if (tab.name && tab.keepAlive !== false) excludeNames.add(String(tab.name));

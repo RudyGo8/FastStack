@@ -36,7 +36,7 @@
             class="lock-dialog-avatar object-cover"
             loading="eager"
           />
-          <img v-else class="lock-dialog-avatar" src="@imgs/user/avatar.webp" alt="" />
+          <img v-else class="lock-dialog-avatar" src="@imgs/user/avatar.png" alt="" />
           <span class="lock-dialog-name">{{ displayName }}</span>
         </div>
         <ElForm ref="formRef" :model="formData" :rules="rules" @submit.prevent="handleLock">
@@ -83,7 +83,7 @@
           <div class="entry-content">
             <div class="avatar-container">
               <img v-if="userAvatar" :src="userAvatar" alt="" class="avatar object-cover" />
-              <img v-else class="avatar" src="@imgs/user/avatar.webp" alt="" />
+              <img v-else class="avatar" src="@imgs/user/avatar.png" alt="" />
               <span class="username">{{ displayName }}</span>
             </div>
             <ElInput

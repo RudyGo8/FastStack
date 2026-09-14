@@ -586,6 +586,23 @@
     "home": {
       "title": "首页"
     },
+    "workplace": {
+      "title": "工作台"
+    },
+    "fachat": {
+      "title": "聊天"
+    },
+    "changelog": {
+      "title": "更新日志"
+    },
+    "dashboard": {
+      "title": "仪表盘",
+      "workplace": "工作台",
+      "analysis": "分析页",
+      "visualization": "三维可视化",
+      "pricing": "定价",
+      "tutorial": "操作手册"
+    },
     "article": {
       "title": "文章管理",
       "articleList": "文章列表",
@@ -712,5 +729,60 @@
     "pageError": "抱歉，您访问的页面不存在。",
     "networkError": "抱歉，服务器报告错误。",
     "returnToHome": "返回首页"
+  },
+  "home": {
+    "systemHealth": "系统健康",
+    "realtime": "实时 · 30s",
+    "viewMore": "查看更多",
+    "onlineUsers": "在线用户",
+    "registeredUsers": "注册用户",
+    "todayLogins": "今日登录",
+    "comparedLastWeek": "较上周",
+    "connected": "已连接",
+    "totalUsers": "总用户",
+    "uniqueUsers": "唯一用户",
+    "thisWeek": "本周 +{count}",
+    "quickLinks": "快速链接",
+    "quickLinksTip": "在顶部标签栏左侧星标上点击，可加入或取消收藏",
+    "noLinks": "暂无链接",
+    "removeLink": "移除 {title}",
+    "featureInDev": "{title} 功能待开发",
+    "routeNotFound": "路由 {href} 不存在，请检查配置",
+    "database": "数据库",
+    "redis": "Redis",
+    "statusNormal": "正常",
+    "statusAbnormal": "异常"
+  },
+  "menuNames": {
+    "system": "系统管理",
+    "monitor": "监控管理",
+    "api": "接口管理",
+    "code": "代码管理",
+    "ai": "AI管理",
+    "task": "任务管理",
+    "menuMgmt": "菜单管理",
+    "dict": "字典管理",
+    "param": "参数管理",
+    "dept": "部门管理",
+    "post": "岗位管理",
+    "role": "角色管理",
+    "user": "用户管理",
+    "log": "日志管理",
+    "notice": "公告管理",
+    "ticket": "工单管理",
+    "version": "版本管理",
+    "onlineUsers": "在线用户",
+    "serverMonitor": "服务器监控",
+    "cacheMonitor": "缓存监控",
+    "swagger": "Swagger文档",
+    "codeGen": "代码生成",
+    "aiChat": "AI智能助手",
+    "aiMemory": "会话记忆",
+    "cron": "定时任务",
+    "storage": "存储管理",
+    "colleague": "同事",
+    "checkin": "打卡",
+    "message": "消息",
+    "profile": "我的"
   }
 }

@@ -21,7 +21,7 @@ echo "============================================"
 [ -f backend/env/.env.dev ] || {
     cp backend/env/.env.example backend/env/.env.dev
     sed -i "s|^DATABASE_PORT = .*|DATABASE_PORT = 3307|; s|^DATABASE_PASSWORD = .*|DATABASE_PASSWORD = 123456|; s|^REDIS_PORT = .*|REDIS_PORT = 6380|; s|^REDIS_PASSWORD = .*|REDIS_PASSWORD = ''|; s|^SECRET_KEY = .*|SECRET_KEY = $(openssl rand -hex 32)|" backend/env/.env.dev
-    echo "已生成 backend/env/.env.dev（MySQL 3307/123456，Redis 6380 无密码，对齐 docker-compose.dev.yaml）"
+    echo "已生成 backend/env/.env.dev（MySQL 3307/123456，Redis 6380 无密码，对齐 docker-compose.yaml）"
 }
 [ -f frontend/web/.env.development ] || cp frontend/web/.env.development.example frontend/web/.env.development
 
@@ -30,7 +30,7 @@ docker compose up -d || exit 1
 
 echo "等待 MySQL 就绪（首次初始化约 30s）..."
 for _ in $(seq 1 60); do
-    [ "$(docker inspect --format '{{.State.Health.Status}}' fva-mysql 2>/dev/null)" = healthy ] && break
+    [ "$(docker compose ps mysql --format '{{.Health}}' 2>/dev/null)" = healthy ] && break
     sleep 1
 done
 
@@ -46,7 +46,7 @@ FRONT_PID=$!
 
 trap 'kill $BACK_PID $FRONT_PID 2>/dev/null' EXIT
 echo ""
-echo "全部已启动: 后端 http://127.0.0.1:8001/docs | 前端 http://127.0.0.1:5173 (admin/123456) | Attu http://localhost:8082"
+echo "全部已启动: 后端 http://127.0.0.1:8001/docs | 前端 http://127.0.0.1:5180 (admin/123456) | Attu http://localhost:8082"
 echo "停止基础设施: docker compose stop"
 echo "Ctrl+C 停止前后端"
 wait

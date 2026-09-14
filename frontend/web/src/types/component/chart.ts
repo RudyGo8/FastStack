@@ -159,14 +159,6 @@ export interface DualBarCompareChartProps extends BaseChartProps {
   barWidth?: number;
 }
 
-/** 地图图表 Props 接口 */
-export interface MapChartProps extends BaseChartProps {
-  mapData?: any[];
-  selectedRegion?: string;
-  showLabels?: boolean;
-  showScatter?: boolean;
-}
-
 /** 双向堆叠柱状图 Props 接口（人口金字塔样式） */
 export interface BidirectionalBarChartProps
   extends BaseChartProps, AxisDisplayProps, InteractionProps {

@@ -22,7 +22,7 @@
               <img
                 v-else
                 class="w-20 h-20 object-cover border-2 border-white rounded-full"
-                src="@imgs/user/avatar.webp"
+                src="@imgs/user/avatar.png"
                 alt=""
               />
               <ElUpload

@@ -21,7 +21,7 @@ services:
     ports:
       - "3307:3306"
     volumes:
-      - faststack_mysql_data:/var/lib/mysql
+      - "${DOCKER_VOLUME_DIRECTORY:-./volumes}/mysql:/var/lib/mysql"
     networks:
       - fva-network
     healthcheck:
@@ -39,7 +39,7 @@ services:
     ports:
       - "6380:6379"
     volumes:
-      - faststack_redis_data:/data
+      - "${DOCKER_VOLUME_DIRECTORY:-./volumes}/redis:/data"
     networks:
       - fva-network
     healthcheck:
@@ -58,7 +58,7 @@ services:
       - ETCD_QUOTA_BACKEND_BYTES=4294967296
       - ETCD_SNAPSHOT_COUNT=50000
     volumes:
-      - faststack_etcd_data:/etcd
+      - "${DOCKER_VOLUME_DIRECTORY:-./volumes}/etcd:/etcd"
     command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
     networks:
       - fva-network
@@ -75,7 +75,7 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
     volumes:
-      - faststack_minio_data:/minio_data
+      - "${DOCKER_VOLUME_DIRECTORY:-./volumes}/minio:/minio_data"
     command: minio server /minio_data --console-address ":9001"
     networks:
       - fva-network
@@ -96,7 +96,7 @@ services:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
     volumes:
-      - faststack_milvus_data:/var/lib/milvus
+      - "${DOCKER_VOLUME_DIRECTORY:-./volumes}/milvus:/var/lib/milvus"
     networks:
       - fva-network
     ports:
@@ -128,10 +128,3 @@ services:
 networks:
   fva-network:
     driver: bridge
-
-volumes:
-  faststack_mysql_data:
-  faststack_redis_data:
-  faststack_etcd_data:
-  faststack_minio_data:
-  faststack_milvus_data:

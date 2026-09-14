@@ -184,12 +184,6 @@ const REMIX_BY_NAME: Record<string, string> = {
   "item-js": "ri:javascript-line",
   "item-react": "ri:reactjs-line",
   "item-vue": "ri:vuejs-line",
-
-  "ai copy": "ri:robot-2-line",
-  "backtop copy": "ri:arrow-up-circle-line",
-  "file copy": "ri:file-text-line",
-  "vue copy": "ri:vuejs-line",
-  "wechat copy": "ri:wechat-fill",
 };
 
 function remixForFileKey(key: string): string {

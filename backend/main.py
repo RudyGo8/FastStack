@@ -9,13 +9,13 @@ from typer.main import Typer
 
 from app.common.enums import EnvironmentEnum
 
-fastapiadmin_cli: Typer = typer.Typer()
+faststack_cli: Typer = typer.Typer()
 alembic_cfg: Config = Config(file_="alembic.ini")
 
 
-@fastapiadmin_cli.command(
+@faststack_cli.command(
     name="run",
-    help="启动 FastapiAdmin 服务, 运行 python(或uv run) main.py run --env=dev 不加参数默认 dev 环境",
+    help="启动 FastStack 服务, 运行 python(或uv run) main.py run --env=dev 不加参数默认 dev 环境",
 )
 def run(
     env: Annotated[EnvironmentEnum, typer.Option("--env", help="运行环境 (dev, prod)")] = EnvironmentEnum.DEV,
@@ -46,7 +46,7 @@ def run(
     )
 
 
-@fastapiadmin_cli.command(
+@faststack_cli.command(
     name="revision",
     help="生成新的 Alembic 迁移脚本, 运行 python(或uv run) main.py revision --env=dev",
 )
@@ -68,7 +68,7 @@ def revision(
     typer.echo(message="迁移脚本已生成")
 
 
-@fastapiadmin_cli.command(
+@faststack_cli.command(
     name="upgrade",
     help="应用最新的 Alembic 迁移, 运行 python(或uv run) main.py upgrade --env=dev",
 )
@@ -89,4 +89,4 @@ def upgrade(
 
 
 if __name__ == "__main__":
-    fastapiadmin_cli()
+    faststack_cli()

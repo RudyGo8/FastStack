@@ -51,16 +51,16 @@ backend/env/.env.dev
 backend/env/.env.prod
 backend/env/.env.test
 
+/.env
 docker/.env
-docker/nginx/app/dist
-docker/nginx/docs/dist
-docker/nginx/web/dist
+volumes/
 docker/nginx/ssl/*
 !docker/nginx/ssl/.gitkeep
 
 frontend/web/.env
 frontend/web/.env.development
 frontend/web/.env.production
+frontend/web/test-results/
 
 # frontend/docs/*
 !frontend/docs/.gitkeep

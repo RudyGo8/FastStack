@@ -190,14 +190,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://gitee.com/fastapiadmin/FastapiAdmin.git"
+    "url": "https://gitee.com/FastStack/FastStack.git"
   },
   "bugs": {
-    "url": "https://gitee.com/fastapiadmin/FastapiAdmin/issues"
+    "url": "https://gitee.com/FastStack/FastStack/issues"
   },
-  "author": "fastapiadmin <948080782@qq.com>",
+  "author": "FastStack",
   "license": "MIT",
-  "homepage": "https://gitee.com/fastapiadmin/FastapiAdmin",
+  "homepage": "https://gitee.com/FastStack/FastStack",
   "browserslist": [
     "Chrome >= 84",
     "Firefox >= 83",

@@ -64,7 +64,6 @@ export const festivalConfigList: FestivalConfig[] = [
   //   scrollText:
   //     "🎉 五月快乐！FastAPI Admin 祝您工作顺利、迭代顺利。本月请关注备份与安全策略，遇到问题可先查看文档或联系运维。",
   // },
-
   /** 单日示例（圣诞节）：需取消注释并确保已 import 雪花图 */
   // {
   //   name: "圣诞节",
@@ -74,7 +73,6 @@ export const festivalConfigList: FestivalConfig[] = [
   //   scrollText:
   //     "Merry Christmas！祝您圣诞快乐，愿节日的欢乐与祝福如雪花般纷至沓来！",
   // },
-
   /** 版本公告类跨日期示例（仅文案参考，可按需改写 scrollText） */
   // {
   //   name: "v3.0 测试阶段",

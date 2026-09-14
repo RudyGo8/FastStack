@@ -93,7 +93,7 @@ def console_start(
 
     result = Panel(
         renderable=final_content,
-        title=f"[bold purple]🚀 FastapiAdmin v{settings.VERSION}[/]",
+        title=f"[bold purple]🚀 FastStack v{settings.VERSION}[/]",
         border_style="green",
         box=box.HEAVY,
         padding=(0, 2),
@@ -110,7 +110,7 @@ def console_end() -> None:
     """
     shutdown_content = Text()
     shutdown_content.append("🛑 ", style="bold red")
-    shutdown_content.append("FastapiAdmin 服务关闭")
+    shutdown_content.append("FastStack 服务关闭")
     shutdown_content.append(f"\n⏰ {datetime.now().strftime('%H:%M:%S')}")
     shutdown_content.append("\n👋 感谢使用！", style="dim")
 

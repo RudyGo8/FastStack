@@ -28,7 +28,7 @@ const BASE_PATH = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_
 
 /** 品牌区参数（来自后端系统参数，带默认值兜底；web 端消费方式：configData?.[key]?.config_value） */
 const brandLogo = computed(() => configStore.configData?.logo_url?.config_value?.trim() || `${BASE_PATH}static/logo.png`)
-const brandTitle = computed(() => configStore.configData?.sys_name?.config_value?.trim() || 'FastapiAdmin')
+const brandTitle = computed(() => configStore.configData?.sys_name?.config_value?.trim() || 'FastStack')
 const brandSubtitle = computed(() => configStore.configData?.login_title?.config_value?.trim() || t('login.brandSubtitle'))
 
 /** 表单验证 schema — 用户名/密码字段级错误提示（wot-ui 函数式校验） */

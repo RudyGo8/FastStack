@@ -24,8 +24,8 @@ rsync -a \
     "$SRC/" "$DEST/"
 
 echo "[2/4] 替换标识: 容器名前缀 fva- -> $NAME-, 库名 -> $DB_NAME, 前端标题 -> $NAME ..."
-sed -i "s/fva-/$NAME-/g" "$DEST/compose.yaml"
-sed -i "s/MYSQL_DATABASE=faststack/MYSQL_DATABASE=$DB_NAME/" "$DEST/compose.yaml"
+sed -i "s/fva-/$NAME-/g" "$DEST/docker-compose.yaml"
+sed -i "s/MYSQL_DATABASE=faststack/MYSQL_DATABASE=$DB_NAME/" "$DEST/docker-compose.yaml"
 sed -i "s/^DATABASE_NAME = .*/DATABASE_NAME = $DB_NAME/" "$DEST/backend/env/.env.example"
 sed -i "s/^VITE_APP_TITLE = .*/VITE_APP_TITLE = $NAME/" \
     "$DEST/frontend/web/.env.development.example" "$DEST/frontend/web/.env.production.example"
@@ -37,4 +37,4 @@ git -C "$DEST" init -b master -q
 echo "[4/4] 完成。后续步骤:"
 echo "  cd ../$NAME && ./run.sh   # 首次生成 .env.dev(含随机 SECRET_KEY, 对齐 compose 端口) 并启动"
 echo "  手工项: 换 logo(frontend/web/public/logo.png)、改 README 标题和徽章"
-echo "  与其他栈端口冲突时, 改 $NAME 目录下 compose.yaml 的 ports"
+echo "  与其他栈端口冲突时, 改 $NAME 目录下 docker-compose.yaml 的 ports"

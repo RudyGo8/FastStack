@@ -4,7 +4,7 @@ set -euo pipefail
 # ==================== 配置 ====================
 # 部署方式：本地开发完成后将项目目录上传至服务器（scp/FTP/面板均可），
 # 再在服务器上执行本脚本完成构建与启动——脚本不再从 git 拉取代码。
-PROJECT_NAME="FastapiAdmin"
+PROJECT_NAME="FastStack"
 WORK_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOCKER_DIR="${WORK_DIR}/docker"
 ENV_FILE="${DOCKER_DIR}/.env"

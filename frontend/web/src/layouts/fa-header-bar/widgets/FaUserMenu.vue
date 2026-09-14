@@ -26,7 +26,7 @@
           <img
             v-else
             class="size-full rounded-full block"
-            src="@imgs/user/avatar.webp"
+            src="@imgs/user/avatar.png"
             alt="avatar"
           />
           <!-- 与旧版 NavbarActions.user-profile__online-indicator 一致 -->
@@ -45,7 +45,7 @@
             <img
               v-else
               class="w-10 h-10 mr-3 ml-0 overflow-hidden rounded-full float-left"
-              src="@imgs/user/avatar.webp"
+              src="@imgs/user/avatar.png"
               alt=""
             />
             <div class="w-[calc(100%-60px)] h-full">

@@ -9,7 +9,7 @@ import { Auth, StorageConfig } from "@utils";
 import { BANNER } from "../../../build/banner";
 
 // -----------------------------
-// Console banner：ANSI 转义码生成网站  https://patorjk.com/software/taag/#p=testall&f=Fire+Font-k&t=fastapiadmin%0A&x=none&v=4&h=4&w=80&we=false
+// Console banner
 // -----------------------------
 
 export function printConsoleBanner(): void {

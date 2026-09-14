@@ -1,4 +1,4 @@
-# FastapiAdmin 部署说明
+# FastStack 部署说明
 
 > **与仓库根文档的关系**：项目总览、快速开始、演示账号等请以 [根目录 README.md](../README.md) 为准；**本文档**侧重 Docker 部署的详细操作。
 
@@ -11,7 +11,7 @@ docker/
 ├── nginx/                  # Nginx 配置
 │   ├── nginx.conf          # Nginx 配置文件
 │   ├── ssl/                # SSL 证书目录（放置 server.key / server.pem，.gitignore 已排除）
-│   ├── web/                # 前端静态文件（构建后自动放置 dist/）
+│   ├── web/                # Web 前端静态文件（构建后手动同步 dist/）
 │   └── app/ + docs/        # 移动端 H5 / 文档站点（按需启用）
 ├── mysql/                  # MySQL 持久化 & 初始化
 │   ├── init/               # 首次启动时执行的 SQL 脚本（可选）
@@ -50,8 +50,8 @@ docker/
    | 变量 | 必填 | 默认值 | 说明 |
    |------|------|--------|------|
    | `MYSQL_ROOT_PASSWORD` | 是 | - | MySQL root 密码 |
-   | `MYSQL_DATABASE` | 否 | `fastapiadmin` | 数据库名 |
-   | `MYSQL_USER` | 否 | `fastapiadmin` | 数据库用户 |
+   | `MYSQL_DATABASE` | 否 | `faststack` | 数据库名 |
+   | `MYSQL_USER` | 否 | `faststack` | 数据库用户 |
    | `MYSQL_PASSWORD` | 是 | - | 数据库密码 |
    | `REDIS_PASSWORD` | 是 | - | Redis 密码 |
    | `BACKEND_PORT` | 否 | `8001` | 后端服务宿主机端口 |
@@ -59,8 +59,6 @@ docker/
    | `HTTPS_PORT` | 否 | `443` | HTTPS 宿主机端口 |
    | `DEPLOY_ENV` | 否 | `prod` | 部署环境（dev/prod） |
    | `BACKEND_IMAGE_TAG` | 否 | `3.0.0` | 后端镜像标签 |
-   | `BUILD_WEB` | 否 | `false` | 部署时构建前端 Web |
-   | `NGINX_SERVER_NAME` | 否 | `service.fastapiadmin.com` | Nginx 域名 |
 
 2. **SSL 证书配置**（可选，但生产环境必须）
 
@@ -69,7 +67,7 @@ docker/
    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
      -keyout docker/nginx/ssl/server.key \
      -out docker/nginx/ssl/server.pem \
-     -subj "/CN=service.fastapiadmin.com"
+     -subj "/CN=service.faststack.com"
 
    # 生产环境请使用正规 CA 签发的证书
    ```
@@ -84,23 +82,19 @@ docker/
 ./deploy.sh
 ```
 
-脚本会自动执行：检查依赖 → 创建目录 → 停止旧容器 → 更新代码 → 构建镜像 → 启动容器 → 验证部署 → 清理旧资源。
+脚本会自动执行：加载环境变量 → 检查依赖和目录 → 构建镜像 → 重建容器 → 验证服务 → 输出日志 → 清理构建缓存。代码需要提前上传或拉取到服务器，脚本本身不会更新代码。
 
 **命令选项**
 
 | 命令 | 说明 |
 |------|------|
-| `./deploy.sh` | 完整部署（跳过前端构建） |
+| `./deploy.sh` | 完整部署（检查、构建、启动和验证） |
 | `./deploy.sh start` | 启动所有容器 |
 | `./deploy.sh stop` | 停止所有容器 |
 | `./deploy.sh restart` | 重启所有容器 |
 | `./deploy.sh logs` | 查看所有容器日志 |
 | `./deploy.sh verify` | 验证部署状态 |
 | `./deploy.sh clean` | 清理旧镜像和构建缓存 |
-| `./deploy.sh --build-frontend` | 完整部署并构建前端（web / app / docs） |
-| `./deploy.sh --skip-frontend` | 完整部署并跳过前端构建（默认） |
-
-或在 `.env` 中设置 `BUILD_WEB=true` 使部署脚本自动构建前端。
 
 ### 方式二：手动操作
 
@@ -129,13 +123,13 @@ docker compose up -d --no-deps --build [service_name]
 
 | 服务 | 地址 |
 |------|------|
-| 前端 | `https://your-domain/web` |
-| Swagger API 文档 | `https://your-domain/docs` |
-| ReDoc API 文档 | `https://your-domain/redoc` |
-| API 健康检查 | `https://your-domain/health` |
-| 后台登录 | 默认账号 `admin`，密码 `123456` |
+| Web 前端 | `https://your-domain/web` |
+| API | `https://your-domain/api/v1/...` |
+| 官网 | `https://your-domain/`（需要先放置 docs 构建产物） |
+| 移动端 H5 | `https://your-domain/app`（需要先放置 app 构建产物） |
+| 后台登录 | 默认账号 `super`、`admin`、`user`，密码均为 `123456` |
 
-> **注意**: `docs`（官网）和 `app`（移动端 H5）默认不参与部署，如需启用请取消 docker-compose.yaml 中相关卷挂载注释。
+> `docker-compose.yaml` 已挂载 Web、App 和 Docs 静态目录，但部署脚本不负责构建前端；对应目录没有构建产物时页面不可用。
 
 ## 容器资源限制
 
@@ -165,32 +159,23 @@ docker compose logs -f [服务名]
 
 ## 前端构建
 
-构建前端有三种方式：
+部署脚本不会自动构建前端。发布 Web 前端前，在仓库根目录执行：
 
-1. **本地构建后手动部署**（推荐）
-   ```bash
-   cd frontend/web
-   npm install && npm run build
-   cp -r dist ../docker/nginx/web/
-   ```
+```bash
+cd frontend/web
+pnpm install
+pnpm build:prod
+mkdir -p ../../docker/nginx/web/dist
+rsync -a --delete dist/ ../../docker/nginx/web/dist/
+```
 
-2. **使用部署脚本**
-   ```bash
-   ./deploy.sh --build-frontend
-   ```
-
-3. **自动构建**：在 `.env` 中设置
-   ```env
-   BUILD_WEB=true
-   # BUILD_APP=true
-   # BUILD_DOCS=true
-   ```
+然后回到仓库根目录执行 `./deploy.sh`。
 
 ## 生产部署建议
 
-1. **移除开发卷挂载**：生产环境下，在 `docker-compose.yaml` 中注释掉 `backend` 服务的 `volumes` 挂载，使用镜像内自带的代码
+1. **保留上传目录挂载**：`backend` 的 `static/upload` 用于持久化用户上传文件，不要随意移除
 2. **使用正规 SSL 证书**：将 CA 签发的证书替换 `nginx/ssl/` 下的文件
-3. **修改域名**：在 `nginx/nginx.conf` 和 `.env` 中修改 `server_name`
+3. **修改域名**：在 `nginx/nginx.conf` 中修改 `server_name`
 4. **关闭调试**：确保 `.env` 中 `DEPLOY_ENV=prod`
 5. **限制数据库端口**：生产环境建议注释 MySQL/Redis 的 `ports` 映射，仅通过容器内部网络访问
 
@@ -216,6 +201,8 @@ docker compose logs -f [服务名]
 
 ## 版本更新
 
+先通过 Git、scp、FTP 或面板把新代码更新到服务器，再执行：
+
 ```bash
-./deploy.sh    # 自动拉取最新代码 → 构建新镜像 → 重启容器
+./deploy.sh    # 构建新镜像 → 重建容器 → 验证服务
 ```

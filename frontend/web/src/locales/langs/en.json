@@ -586,6 +586,23 @@
     "home": {
       "title": "Home"
     },
+    "workplace": {
+      "title": "Workbench"
+    },
+    "fachat": {
+      "title": "Fachat"
+    },
+    "changelog": {
+      "title": "Release notes"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "workplace": "Workplace",
+      "analysis": "Analysis",
+      "visualization": "3D Visualization",
+      "pricing": "Pricing",
+      "tutorial": "User manual"
+    },
     "article": {
       "title": "Article",
       "articleList": "Article List",
@@ -712,5 +729,60 @@
     "pageError": "Sorry, the page you visited does not exist.",
     "networkError": "Sorry, the server reported an error.",
     "returnToHome": "Return to home"
+  },
+  "home": {
+    "systemHealth": "System Health",
+    "realtime": "Realtime · 30s",
+    "viewMore": "View more",
+    "onlineUsers": "Online Users",
+    "registeredUsers": "Registered Users",
+    "todayLogins": "Today's Logins",
+    "comparedLastWeek": "vs last week",
+    "connected": "Connected",
+    "totalUsers": "Total Users",
+    "uniqueUsers": "Unique Users",
+    "thisWeek": "This week +{count}",
+    "quickLinks": "Quick Links",
+    "quickLinksTip": "Click the star icon on the left of the top tab bar to add or remove favorites",
+    "noLinks": "No links yet",
+    "removeLink": "Remove {title}",
+    "featureInDev": "{title} is under development",
+    "routeNotFound": "Route {href} not found, please check the configuration",
+    "database": "Database",
+    "redis": "Redis",
+    "statusNormal": "OK",
+    "statusAbnormal": "Error"
+  },
+  "menuNames": {
+    "system": "System",
+    "monitor": "Monitor",
+    "api": "API",
+    "code": "Code",
+    "ai": "AI",
+    "task": "Task",
+    "menuMgmt": "Menu",
+    "dict": "Dictionary",
+    "param": "Parameters",
+    "dept": "Department",
+    "post": "Position",
+    "role": "Role",
+    "user": "User",
+    "log": "Log",
+    "notice": "Notice",
+    "ticket": "Ticket",
+    "version": "Version",
+    "onlineUsers": "Online Users",
+    "serverMonitor": "Server",
+    "cacheMonitor": "Cache",
+    "swagger": "Swagger",
+    "codeGen": "Code Gen",
+    "aiChat": "AI Assistant",
+    "aiMemory": "AI Memory",
+    "cron": "Cron Job",
+    "storage": "Storage",
+    "colleague": "Colleague",
+    "checkin": "Check-in",
+    "message": "Message",
+    "profile": "Profile"
   }
 }

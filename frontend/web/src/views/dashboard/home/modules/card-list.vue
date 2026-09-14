@@ -39,13 +39,13 @@
         <div class="flex items-center justify-between mt-1 text-xs text-g-600">
           <span>
             <template v-if="item.change !== undefined">
-              较上周
+              {{ t("home.comparedLastWeek") }}
               <span :class="item.change.indexOf('+') === 0 ? 'text-success' : 'text-danger'">
                 {{ item.change }}
               </span>
             </template>
             <template v-else-if="item.totalLabel">
-              {{ item.totalLabel }}：{{ item.totalValue }}
+              {{ item.totalLabel }}: {{ item.totalValue }}
             </template>
           </span>
           <span v-if="item.updateTime">{{ item.updateTime }}</span>
@@ -56,14 +56,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, markRaw, type Component } from "vue";
+import { ref, computed, onMounted, markRaw, type Component } from "vue";
+import { useI18n } from "vue-i18n";
 import { Connection } from "@element-plus/icons-vue";
 import { checkPerm } from "@/utils/checkPerm";
 import DashboardAPI from "@/api/module_monitor/dashboard";
 import type { DashboardStats } from "@/api/module_monitor/dashboard";
 
+const { t } = useI18n();
+
 interface CardDataItem {
-  des: string;
+  desKey: string;
   icon: string;
   iconBg?: string;
   iconColor?: string;
@@ -71,12 +74,12 @@ interface CardDataItem {
   num: number;
   change?: string;
   rich?: boolean;
-  tag?: string;
+  tagKey?: string;
   tagType?: "danger" | "success" | "warning" | "info";
-  status?: string;
+  statusKey?: string;
   statusColor?: string;
   statusIcon?: Component;
-  totalLabel?: string;
+  totalLabelKey?: string;
   totalValue?: number | string;
   updateTime?: string;
   animatedCount?: number;
@@ -86,45 +89,55 @@ const now = new Date();
 const pad = (n: number) => String(n).padStart(2, "0");
 const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
-const dataList = ref<CardDataItem[]>([
+const rawData = ref<CardDataItem[]>([
   {
-    des: "在线用户",
+    desKey: "home.onlineUsers",
     icon: "ri:group-line",
     iconBg: "bg-danger/10",
     iconColor: "text-danger",
     animateIcon: true,
     num: 0,
     rich: true,
-    tag: "实时",
+    tagKey: "home.realtime",
     tagType: "danger",
-    status: "已连接",
+    statusKey: "home.connected",
     statusColor: "text-success",
     statusIcon: markRaw(Connection),
     updateTime: timeStr,
   },
   {
-    des: "注册用户",
+    desKey: "home.registeredUsers",
     icon: "ri:bar-chart-grouped-line",
     iconBg: "bg-success/10",
     iconColor: "text-success",
     num: 0,
     rich: true,
     animatedCount: 0,
-    totalLabel: "总用户",
+    totalLabelKey: "home.totalUsers",
     totalValue: 0,
   },
   {
-    des: "今日登录",
+    desKey: "home.todayLogins",
     icon: "ri:eye-line",
     iconBg: "bg-primary/10",
     iconColor: "text-primary",
     num: 0,
     rich: true,
     animatedCount: 0,
-    totalLabel: "唯一用户",
+    totalLabelKey: "home.uniqueUsers",
     totalValue: 0,
   },
 ]);
+
+const dataList = computed(() =>
+  rawData.value.map((item) => ({
+    ...item,
+    des: t(item.desKey),
+    tag: item.tagKey ? t(item.tagKey) : undefined,
+    status: item.statusKey ? t(item.statusKey) : undefined,
+    totalLabel: item.totalLabelKey ? t(item.totalLabelKey) : undefined,
+  }))
+);
 
 async function loadStats() {
   // 无权限则跳过 API 调用，避免 403 错误
@@ -139,18 +152,18 @@ async function loadStats() {
     const ts = `${now2.getFullYear()}-${pad(now2.getMonth() + 1)}-${pad(now2.getDate())} ${pad(now2.getHours())}:${pad(now2.getMinutes())}:${pad(now2.getSeconds())}`;
 
     // 在线用户（第1个卡片）
-    dataList.value[0]!.num = stats.online_users;
-    dataList.value[0]!.updateTime = ts;
+    rawData.value[0]!.num = stats.online_users;
+    rawData.value[0]!.updateTime = ts;
 
     // 注册用户（第2个卡片）
-    dataList.value[1]!.num = stats.total_users;
-    dataList.value[1]!.totalValue = `本周 +${stats.week_user_created}`;
-    dataList.value[1]!.animatedCount = stats.total_users;
+    rawData.value[1]!.num = stats.total_users;
+    rawData.value[1]!.totalValue = t("home.thisWeek", { count: stats.week_user_created });
+    rawData.value[1]!.animatedCount = stats.total_users;
 
     // 今日登录（第3个卡片）
-    dataList.value[2]!.num = stats.today_login_count;
-    dataList.value[2]!.totalValue = stats.today_unique_users;
-    dataList.value[2]!.animatedCount = stats.today_login_count;
+    rawData.value[2]!.num = stats.today_login_count;
+    rawData.value[2]!.totalValue = stats.today_unique_users;
+    rawData.value[2]!.animatedCount = stats.today_login_count;
   } catch {
     // 接口错误不影响页面渲染
   }

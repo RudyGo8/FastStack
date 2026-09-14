@@ -1,4 +1,4 @@
-"""FastapiAdmin 应用工厂：唯一的应用构建与生命周期定义点。"""
+"""FastStack 应用工厂：唯一的应用构建与生命周期定义点。"""
 
 from collections.abc import AsyncGenerator
 from typing import Any

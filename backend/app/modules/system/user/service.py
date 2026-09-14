@@ -242,7 +242,7 @@ class UserService:
             return [
                 MenuOutSchema.model_validate(menu)
                 for menu in await MenuCRUD(self.auth, self.db).get_list(
-                    search={"id": ("in", list(menu_ids)), **_pc_only},
+                    search={"id": ("in", list(menu_ids)), "status": 0, **_pc_only},
                     order_by=[{"order": "asc"}],
                 )
             ]

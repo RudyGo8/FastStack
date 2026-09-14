@@ -1,5 +1,6 @@
 import { request } from "@utils";
 import { createSSEClient, httpEndpoint, type SSEClient } from "@utils/sse";
+import { $t } from "@/locales";
 
 const API_PATH = "/monitor/online";
 
@@ -77,7 +78,7 @@ function dependencyItem(title: string, icon: string, status: number): HealthItem
     icon,
     class: ok ? OK_ITEM_CLASS : ERROR_ITEM_CLASS,
     title,
-    status: ok ? "正常" : "异常",
+    status: ok ? $t("home.statusNormal") : $t("home.statusAbnormal"),
     time: "",
   };
 }
@@ -85,8 +86,8 @@ function dependencyItem(title: string, icon: string, status: number): HealthItem
 /** 健康载荷 → 健康卡片列表（数据库 / Redis） */
 function mapReadinessToHealthItems(payload: ServiceInfoPayload): HealthItem[] {
   return [
-    dependencyItem("数据库", "ri:database-2-line", payload.db_status),
-    dependencyItem("Redis", "ri:server-line", payload.redis_status),
+    dependencyItem($t("home.database"), "ri:database-2-line", payload.db_status),
+    dependencyItem($t("home.redis"), "ri:server-line", payload.redis_status),
   ];
 }
 

@@ -50,7 +50,7 @@ function handleLangSelect(option: { labelKey: string, value: string }) {
 }
 
 /** 品牌区与相关链接参数（来自后端系统参数，带默认值兜底；web 端消费方式：configData?.[key]?.config_value） */
-const brandTitle = computed(() => configStore.configData?.sys_name?.config_value?.trim() || 'FastapiAdmin')
+const brandTitle = computed(() => configStore.configData?.sys_name?.config_value?.trim() || 'FastStack')
 const brandDesc = computed(() => configStore.configData?.login_subtitle?.config_value?.trim() || t('setting.brandDesc'))
 const helpDoc = computed(() => configStore.configData?.help_doc?.config_value?.trim() || '')
 const gitCode = computed(() => configStore.configData?.git_code?.config_value?.trim() || '')

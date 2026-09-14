@@ -15,7 +15,7 @@ from app.modules.system.dept.model import DeptModel
 from app.modules.system.dict.model import DictDataModel, DictTypeModel
 from app.modules.system.menu.model import MenuModel
 from app.modules.system.params.model import ParamsModel
-from app.modules.system.role.model import RoleModel
+from app.modules.system.role.model import RoleModel, RoleMenusModel
 from app.modules.system.user.model import UserModel, UserRolesModel
 from app.modules.system.versions.model import VersionModel
 from app.modules.task.cronjob.node.model import NodeModel
@@ -35,6 +35,7 @@ class InitializeData:
         DeptModel,
         ParamsModel,
         RoleModel,
+        RoleMenusModel,
         DictTypeModel,
         DictDataModel,
         UserModel,

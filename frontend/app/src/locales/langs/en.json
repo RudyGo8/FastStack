@@ -46,7 +46,7 @@
       "nicknamePlaceholder": "Please enter a nickname",
       "nicknameRequired": "Please enter a nickname"
     },
-    "shareDefaultTitle": "FastapiAdmin - Efficient enterprise management mobile platform",
+    "shareDefaultTitle": "FastStack - Efficient enterprise management mobile platform",
     "subscribeTitle": "Enable Message Notifications",
     "subscribeContent": "You have disabled message notifications. Go to settings to enable?",
     "subscribeGoSetting": "Go to Settings",
@@ -170,7 +170,7 @@
     "pendingTickets": "Pending",
     "processingTickets": "Processing",
     "doneTickets": "Done",
-    "shareTitle": "{name} invites you to join FastapiAdmin",
+    "shareTitle": "{name} invites you to join FastStack",
     "roleFallback": "Super Admin · Tech Dept"
   },
   "profile": {
@@ -237,7 +237,7 @@
   },
   "chat": {
     "title": "AI Assistant",
-    "shareTitle": "FastapiAdmin AI Assistant - Smart Chat, Anytime",
+    "shareTitle": "FastStack AI Assistant - Smart Chat, Anytime",
     "sessionList": "Sessions",
     "new": "New",
     "newSession": "New Chat",
@@ -251,7 +251,7 @@
     "sessionId": "Session {id}",
     "noReply": "(No reply)",
     "requestFailed": "Request failed, please retry later.",
-    "welcome": "Hi! I'm the FastapiAdmin AI Assistant. How can I help you?",
+    "welcome": "Hi! I'm the FastStack AI Assistant. How can I help you?",
     "empty": "No sessions, tap + to create one",
     "loadMore": "Load earlier messages ({count})",
     "inputPlaceholder": "Type a message...",
@@ -316,8 +316,8 @@
   },
   "index": {
     "navTitle": "Workbench",
-    "shareTitle": "{greeting}! {name} invites you to use FastapiAdmin",
-    "welcomeDefault": "Welcome to FastapiAdmin",
+    "shareTitle": "{greeting}! {name} invites you to use FastStack",
+    "welcomeDefault": "Welcome to FastStack",
     "today": "Today",
     "welcomeBack": "Welcome back, have a productive day",
     "overview": "Overview",
@@ -356,10 +356,10 @@
   },
   "work": {
     "navTitle": "Workbench",
-    "shareTitle": "FastapiAdmin Workbench - Notices / Tickets / AI",
+    "shareTitle": "FastStack Workbench - Notices / Tickets / AI",
     "businessCenter": "Business Center",
     "devTools": "Developer Tools",
-    "nameFallback": "FastapiAdmin",
+    "nameFallback": "FastStack",
     "roleFallback": "Super Admin",
     "searchPlaceholder": "Search modules",
     "emptyTip": "No matching module, try another keyword"
