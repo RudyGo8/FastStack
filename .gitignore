@@ -52,7 +52,6 @@ backend/env/.env.prod
 backend/env/.env.test
 
 docker/.env
-volumes/
 docker/nginx/app/dist
 docker/nginx/docs/dist
 docker/nginx/web/dist

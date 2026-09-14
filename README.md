@@ -44,7 +44,7 @@ FastStack/
 │   ├── web/             # Vue3 Web 前端（Element Plus + TypeScript + Tailwind4）
 │   └── app/             # UniApp 移动端（H5 + 小程序 + App）
 ├─ docker/               # 生产全栈部署（docker-compose.yaml + ../deploy.sh）
-├─ compose.yaml          # 开发基础设施（MySQL/Redis/Milvus 全家桶，数据落 ./volumes/）
+├─ compose.yaml          # 开发基础设施（MySQL/Redis/Milvus 全家桶，数据存 Docker 命名卷）
 ├─ run.sh                # 一键启动（开发）
 └─ init-project.sh       # 脚手架衍生脚本
 ```

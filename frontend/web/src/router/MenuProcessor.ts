@@ -1,16 +1,10 @@
 import type { UserInfo } from "@/api/module_system/user";
 import type { MenuTable } from "@/api/module_system/menu";
 import type { AppRouteRecord, RouteMeta } from "@/types/router";
-import type { AppRouteRecordRaw } from "@utils";
 import { useUserStore } from "@stores";
 import { useAppMode } from "@/hooks/core/useAppMode";
 
-import {
-  HOME_MENU_META,
-  DASHBOARD_PARENT_META,
-  dashboardLayoutChildren,
-  ROUTE_COMPONENT_LAYOUT,
-} from "./routes";
+import { HOME_MENU_META, ROUTE_COMPONENT_LAYOUT } from "./routes";
 import { MenuTypeEnum } from "@/enums/system/menu.enum";
 
 /**
@@ -274,26 +268,6 @@ export class MenuProcessor {
 
 // ──────── 壳层路由补全 ────────
 
-/** 从后端菜单中去掉组件和 redirect，供侧栏合并 */
-function stripRouteRecordForShell(route: AppRouteRecordRaw): AppRouteRecord {
-  const children = route.children?.map(stripRouteRecordForShell);
-  return {
-    path: route.path,
-    name: route.name,
-    meta: (route.meta ?? {}) as AppRouteRecord["meta"],
-    ...(children?.length ? { children } : {}),
-  } as AppRouteRecord;
-}
-
-function getDashboardMenuTreeForMerge(): AppRouteRecord {
-  return {
-    name: "Dashboard",
-    path: "/dashboard",
-    meta: DASHBOARD_PARENT_META,
-    children: dashboardLayoutChildren.map(stripRouteRecordForShell),
-  };
-}
-
 function normalizeMenuPath(path?: string): string {
   if (!path || !path.trim()) return "";
   const p = path.trim();
@@ -309,20 +283,7 @@ function collectPathsAndNames(items: AppRouteRecord[], paths: Set<string>, names
   }
 }
 
-function dashboardRoutesToShellMenu(route: AppRouteRecord, parentAbs = ""): AppRouteRecord {
-  const raw = route.path?.trim() ?? "";
-  const fullPath =
-    raw.startsWith("/") && raw !== "/"
-      ? raw
-      : parentAbs
-        ? `${parentAbs.replace(/\/$/, "")}/${raw.replace(/^\/+/, "")}`
-        : `/${raw.replace(/^\/+/, "")}`;
-  const meta = { ...route.meta, shellRoute: true as const };
-  const children = route.children?.map((c) => dashboardRoutesToShellMenu(c, fullPath));
-  return { ...route, path: fullPath, meta, children, component: undefined, redirect: undefined };
-}
-
-/** 将壳层路由（/home、/dashboard）合并到菜单列表 */
+/** 将壳层路由（/home）合并到菜单列表 */
 export function mergeShellRoutesIntoMenu(menuList: AppRouteRecord[]): AppRouteRecord[] {
   const paths = new Set<string>();
   const names = new Set<string>();
@@ -348,9 +309,6 @@ export function mergeShellRoutesIntoMenu(menuList: AppRouteRecord[]): AppRouteRe
   };
 
   tryPush(mergeShellHomeMenu);
-  if (!paths.has("/dashboard")) {
-    tryPush(dashboardRoutesToShellMenu(getDashboardMenuTreeForMerge()));
-  }
 
   if (additions.length === 0) return menuList;
   return [...additions, ...menuList];

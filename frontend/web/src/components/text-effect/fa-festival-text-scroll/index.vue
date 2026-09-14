@@ -21,7 +21,6 @@ import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import { useSettingsStore } from "@stores";
 import { useCeremony } from "@/hooks/core/useCeremony";
-import { WEB_LINKS } from "@utils";
 
 defineOptions({ name: "FaFestivalTextScroll" });
 
@@ -38,7 +37,7 @@ function versionLabel(): string {
 const festivalScrollDisplayHtml = computed(() => {
   const raw = currentFestivalData.value?.scrollText ?? "";
   const ver = versionLabel() || "v0.0.0";
-  return raw.replace(/\{\{version\}\}/g, ver).replace(/\{\{introduceUrl\}\}/g, WEB_LINKS.INTRODUCE);
+  return raw.replace(/\{\{version\}\}/g, ver);
 });
 
 const showFestivalStrip = computed(

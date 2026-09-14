@@ -90,7 +90,7 @@
     {
         "config_name": "源码地址",
         "config_key": "git_code",
-        "config_value": "https://github.com/fastapi-admin/fastapi-admin",
+        "config_value": "",
         "config_type": true,
         "status": 0,
         "description": "项目源码仓库地址"

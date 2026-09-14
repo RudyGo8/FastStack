@@ -21,8 +21,6 @@ import { describe, it, expect, vi } from "vitest";
 // （unplugin-auto-import / unplugin-vue-components），单测环境无法求值。本用例只校验
 // 路由记录的**结构**，故把视图全部替换为桩，避免拉起整条组件依赖链。
 vi.mock("@/layouts/index.vue", () => ({ default: { name: "AppLayout" } }));
-vi.mock("@views/dashboard/workplace/index.vue", () => ({ default: { name: "DashboardWorkplace" } }));
-vi.mock("@views/dashboard/analysis/index.vue", () => ({ default: { name: "DashboardAnalysis" } }));
 vi.mock("@views/dashboard/home/index.vue", () => ({ default: { name: "DashboardHome" } }));
 vi.mock("@views/redirect/index.vue", () => ({ default: { name: "RedirectView" } }));
 vi.mock("@views/module_system/auth/login/index.vue", () => ({ default: { name: "LoginView" } }));
@@ -31,10 +29,6 @@ vi.mock("@views/exception/403/index.vue", () => ({ default: { name: "Exception40
 vi.mock("@views/exception/404/index.vue", () => ({ default: { name: "Exception404" } }));
 vi.mock("@views/exception/500/index.vue", () => ({ default: { name: "Exception500" } }));
 vi.mock("@views/fastlink/current/profile.vue", () => ({ default: { name: "FastlinkProfile" } }));
-vi.mock("@views/fastlink/changelog/index.vue", () => ({ default: { name: "FastlinkChangelog" } }));
-vi.mock("@views/fastlink/pricing/index.vue", () => ({ default: { name: "FastlinkPricing" } }));
-vi.mock("@views/fastlink/tutorial/index.vue", () => ({ default: { name: "FastlinkTutorial" } }));
-vi.mock("@views/fastlink/fachat/index.vue", () => ({ default: { name: "FastlinkFachat" } }));
 
 type AnyRoute = {
   path?: string;
@@ -77,9 +71,9 @@ describe("静态路由 — 中间层不挂组件（深度跳级的前提）", ()
     }
   });
 
-  it("dashboard / fastlink 两个多级目录保持无组件（历史壳组件的回归锚点）", async () => {
+  it("fastlink 多级目录保持无组件（历史壳组件的回归锚点）", async () => {
     const { staticRoutes } = await import("@/router/routes");
-    for (const name of ["Dashboard", "Fastlink"]) {
+    for (const name of ["Fastlink"]) {
       const route = findByName(staticRoutes as AnyRoute[], name);
       expect(route, `未找到目录 "${name}"`).toBeDefined();
       expect(route!.children?.length, `"${name}" 应仍有子路由`).toBeGreaterThan(0);

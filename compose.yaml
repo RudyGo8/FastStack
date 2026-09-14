@@ -1,5 +1,5 @@
 # ============================================
-# FastapiAdmin 开发环境基础设施（MySQL / Redis / Milvus 全家桶）
+# FastStack 开发环境基础设施（MySQL / Redis / Milvus 全家桶）
 # 使用方式: 在仓库根目录执行 docker compose up -d
 # 生产全栈部署用 docker/docker-compose.yaml + ./deploy.sh
 # 注意: 容器名与端口和 fva-* 栈一致，别处再跑同名栈会冲突
@@ -21,7 +21,7 @@ services:
     ports:
       - "3307:3306"
     volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-./volumes}/mysql:/var/lib/mysql
+      - faststack_mysql_data:/var/lib/mysql
     networks:
       - fva-network
     healthcheck:
@@ -39,7 +39,7 @@ services:
     ports:
       - "6380:6379"
     volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-./volumes}/redis:/data
+      - faststack_redis_data:/data
     networks:
       - fva-network
     healthcheck:
@@ -58,7 +58,7 @@ services:
       - ETCD_QUOTA_BACKEND_BYTES=4294967296
       - ETCD_SNAPSHOT_COUNT=50000
     volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-./volumes}/etcd:/etcd
+      - faststack_etcd_data:/etcd
     command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
     networks:
       - fva-network
@@ -75,7 +75,7 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
     volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-./volumes}/minio:/minio_data
+      - faststack_minio_data:/minio_data
     command: minio server /minio_data --console-address ":9001"
     networks:
       - fva-network
@@ -96,7 +96,7 @@ services:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
     volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-./volumes}/milvus:/var/lib/milvus
+      - faststack_milvus_data:/var/lib/milvus
     networks:
       - fva-network
     ports:
@@ -128,3 +128,10 @@ services:
 networks:
   fva-network:
     driver: bridge
+
+volumes:
+  faststack_mysql_data:
+  faststack_redis_data:
+  faststack_etcd_data:
+  faststack_minio_data:
+  faststack_milvus_data:

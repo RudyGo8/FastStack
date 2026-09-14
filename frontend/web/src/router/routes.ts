@@ -14,8 +14,6 @@ import { defineComponent, h, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { $t } from "@/locales";
 import LayoutComponent from "@/layouts/index.vue";
-import DashboardWorkplace from "@views/dashboard/workplace/index.vue";
-import DashboardAnalysis from "@views/dashboard/analysis/index.vue";
 import RedirectView from "@views/redirect/index.vue";
 import LoginView from "@views/module_system/auth/login/index.vue";
 import Exception401 from "@views/exception/401/index.vue";
@@ -24,10 +22,6 @@ import Exception404 from "@views/exception/404/index.vue";
 import Exception500 from "@views/exception/500/index.vue";
 import DashboardHome from "@views/dashboard/home/index.vue";
 import FastlinkProfile from "@views/fastlink/current/profile.vue";
-import FastlinkChangelog from "@views/fastlink/changelog/index.vue";
-import FastlinkPricing from "@views/fastlink/pricing/index.vue";
-import FastlinkTutorial from "@views/fastlink/tutorial/index.vue";
-import FastlinkFachat from "@views/fastlink/fachat/index.vue";
 
 // ──────── IframeRouteManager ────────
 
@@ -103,33 +97,6 @@ export const HOME_MENU_META: RouteMeta = {
   keepAlive: true,
   fixedTab: true,
 };
-
-/** 仪表盘父菜单配置 */
-export const DASHBOARD_PARENT_META: RouteMeta = {
-  title: "menus.dashboard.title",
-  icon: "ri:pie-chart-line",
-  alwaysShow: true,
-};
-
-/** Dashboard 静态子路由（唯一数据源，壳层补全和静态路由共用） */
-export const dashboardLayoutChildren: AppRouteRecordRaw[] = [
-  {
-    path: "workplace",
-    name: "DashboardWorkplace",
-    component: DashboardWorkplace,
-    meta: { title: "menus.dashboard.workplace", icon: "ri:bar-chart-box-line", keepAlive: true },
-  },
-  {
-    path: "analysis",
-    name: "DashboardAnalysis",
-    component: DashboardAnalysis,
-    meta: {
-      title: "menus.dashboard.analysis",
-      icon: "ri:align-item-bottom-line",
-      keepAlive: false,
-    },
-  },
-];
 
 // ──────── 路由常量 ────────
 
@@ -232,7 +199,7 @@ export const staticRoutes: AppRouteRecordRaw[] = [
     meta: { hidden: true, isHideTab: true, title: "500" },
     component: Exception500,
   },
-  // 根 Layout：存放壳层路由（home/dashboard/fastlink）
+  // 根 Layout：存放壳层路由（home/fastlink）
   {
     path: "/",
     name: ROOT_LAYOUT_ROUTE_NAME,
@@ -245,14 +212,7 @@ export const staticRoutes: AppRouteRecordRaw[] = [
         component: DashboardHome,
         meta: HOME_MENU_META,
       },
-      {
-        path: "dashboard",
-        name: "Dashboard",
-        redirect: "/dashboard/workplace",
-        meta: DASHBOARD_PARENT_META,
-        children: dashboardLayoutChildren,
-      },
-      // 隐藏的壳层路由：个人中心、更新日志、定价、教程、AI 聊天
+      // 隐藏的壳层路由：个人中心
       {
         path: "fastlink",
         name: "Fastlink",
@@ -263,54 +223,6 @@ export const staticRoutes: AppRouteRecordRaw[] = [
             name: "FastlinkProfile",
             meta: { title: $t("menus.system.userCenter"), icon: "ri:user-line", hidden: true },
             component: FastlinkProfile,
-          },
-          {
-            path: "changelog",
-            name: "FastlinkChangeLog",
-            meta: {
-              title: $t("menus.changelog.title"),
-              icon: "ri:draft-line",
-              hidden: true,
-              keepAlive: true,
-              isHideTab: true,
-            },
-            component: FastlinkChangelog,
-          },
-          {
-            path: "pricing",
-            name: "FastlinkPricing",
-            meta: {
-              title: $t("menus.dashboard.pricing"),
-              icon: "ri:money-cny-box-line",
-              hidden: true,
-              keepAlive: true,
-              isHideTab: true,
-            },
-            component: FastlinkPricing,
-          },
-          {
-            path: "tutorial",
-            name: "FastlinkTutorial",
-            meta: {
-              title: $t("menus.dashboard.tutorial"),
-              icon: "ri:book-2-line",
-              hidden: true,
-              keepAlive: true,
-              isHideTab: true,
-            },
-            component: FastlinkTutorial,
-          },
-          {
-            path: "fachat",
-            name: "FastlinkFachat",
-            meta: {
-              title: $t("menus.fachat.title"),
-              icon: "ri:message-3-line",
-              hidden: true,
-              keepAlive: true,
-              isHideTab: true,
-            },
-            component: FastlinkFachat,
           },
         ],
       },

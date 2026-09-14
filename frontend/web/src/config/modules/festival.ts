@@ -50,21 +50,6 @@ import type { FestivalConfig } from "@/types/config";
 
 export const festivalConfigList: FestivalConfig[] = [
   /**
-   * 非节日常驻：全年顶栏公告（匹配优先级最低，见文件头「优先级」说明）
-   */
-  {
-    name: "系统公告",
-    date: "2026-01-01",
-    endDate: "2026-12-31",
-    image: "",
-    skipFireworks: true,
-    isResidentBanner: true,
-    count: 3,
-    scrollText:
-      '🎉 {{version}}版本正式上线！能力全面提升，配套完整交付方案，助力高效开发与商业落地。 <a href="{{introduceUrl}}" target="_blank" rel="noopener noreferrer">👉 立即体验演示</a>',
-  },
-
-  /**
    * 以下为历史示例片段（默认注释），需要时可取消注释并酌情调整日期 / import：
    *
    * 五月短区间示例：含当前日期则会出现节日滚动条；烟花需当日首次进入且未在同日标记已播。

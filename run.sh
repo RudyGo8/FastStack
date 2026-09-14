@@ -24,7 +24,6 @@ echo "============================================"
     echo "已生成 backend/env/.env.dev（MySQL 3307/123456，Redis 6380 无密码，对齐 docker-compose.dev.yaml）"
 }
 [ -f frontend/web/.env.development ] || cp frontend/web/.env.development.example frontend/web/.env.development
-mkdir -p volumes/{mysql,redis,etcd,minio,milvus} # 绑定挂载要求目录存在
 
 echo "[1/3] 启动基础设施 (MySQL:3307 / Redis:6380 / Milvus:19531)..."
 docker compose up -d || exit 1
