@@ -1,5 +1,6 @@
-"""FastStack 应用工厂：唯一的应用构建与生命周期定义点。"""
+"""SopFast 应用工厂：唯一的应用构建与生命周期定义点。"""
 
+import asyncio
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -40,6 +41,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[Any, Any]:
     await SchedulerUtil.init_scheduler(redis=app.state.redis)
     logger.info("✅ 定时任务调度器 初始化完成")
 
+    # SOP 模块后台任务：业务表初始化、MCP 热插拔监听、夜间快照调度
+    sop_tasks: list[asyncio.Task] = []
+    from app.modules.sop.config import SOP_ENABLE
+    if SOP_ENABLE:
+        from app.modules.sop.database import init_sop_tables
+        from app.modules.sop.domain.scheduler import snapshot_scheduler_loop
+        from app.modules.sop.tools.mcp_gateway import mcp_client_manager
+
+        await asyncio.to_thread(init_sop_tables)
+        logger.info("✅ SOP 业务表 初始化完成")
+        await mcp_client_manager.initialize()
+        sop_tasks.append(asyncio.create_task(mcp_client_manager.watch_config_loop(interval_seconds=30)))
+        sop_tasks.append(asyncio.create_task(snapshot_scheduler_loop(target_hour=23, target_minute=0)))
+        logger.info("✅ SOP 模块后台任务已启动")
+
     console_start(
         host=settings.SERVER_HOST,
         port=settings.SERVER_PORT,
@@ -51,6 +67,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[Any, Any]:
     )
 
     yield
+
+    for task in sop_tasks:
+        task.cancel()
+    for task in sop_tasks:
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
     try:
         await SchedulerUtil.shutdown(wait=True)

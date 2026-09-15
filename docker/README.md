@@ -1,4 +1,4 @@
-# FastStack 部署说明
+# SopFast 部署说明
 
 > **与仓库根文档的关系**：项目总览、快速开始、演示账号等请以 [根目录 README.md](../README.md) 为准；**本文档**侧重 Docker 部署的详细操作。
 
@@ -50,8 +50,8 @@ docker/
    | 变量 | 必填 | 默认值 | 说明 |
    |------|------|--------|------|
    | `MYSQL_ROOT_PASSWORD` | 是 | - | MySQL root 密码 |
-   | `MYSQL_DATABASE` | 否 | `faststack` | 数据库名 |
-   | `MYSQL_USER` | 否 | `faststack` | 数据库用户 |
+   | `MYSQL_DATABASE` | 否 | `sopfast_mysql` | 数据库名 |
+   | `MYSQL_USER` | 否 | `sopfast_mysql` | 数据库用户 |
    | `MYSQL_PASSWORD` | 是 | - | 数据库密码 |
    | `REDIS_PASSWORD` | 是 | - | Redis 密码 |
    | `BACKEND_PORT` | 否 | `8001` | 后端服务宿主机端口 |
@@ -67,7 +67,7 @@ docker/
    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
      -keyout docker/nginx/ssl/server.key \
      -out docker/nginx/ssl/server.pem \
-     -subj "/CN=service.faststack.com"
+     -subj "/CN=service.sopfast.com"
 
    # 生产环境请使用正规 CA 签发的证书
    ```

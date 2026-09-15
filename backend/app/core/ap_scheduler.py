@@ -59,7 +59,7 @@ def _humanize_job_error(detail: Any) -> str:
 # 多 worker 下单实例调度锁：所有进程共享同一个 RedisJobStore，若每个进程都自行
 # start，同一任务会被重复调度执行。仅持有锁的进程运行调度器并周期续期，其余进程
 # 周期争抢——持有者崩溃（锁过期）后自动接管。
-SCHEDULER_LOCK_KEY = "faststack:scheduler:lock"
+SCHEDULER_LOCK_KEY = "sopfast:scheduler:lock"
 SCHEDULER_LOCK_TTL = 30  # 锁有效期（秒）；须大于续期间隔，否则锁在续期前就过期
 SCHEDULER_RENEW_INTERVAL = 10  # 持有者续期间隔
 SCHEDULER_POLL_INTERVAL = 5  # 候选进程争抢间隔；越小接管越快，Redis 压力越大

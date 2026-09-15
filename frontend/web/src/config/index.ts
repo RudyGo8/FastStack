@@ -38,7 +38,7 @@ import type { SystemConfig } from "@/types/config";
 const appConfig: SystemConfig = {
   // 系统信息
   systemInfo: {
-    name: "FastStack", // 系统名称
+    name: "SopFast", // 系统名称
   },
   // 系统主题
   systemThemeStyles: {

@@ -1,0 +1,39 @@
+"""
+@create_time: 2026/4/27 下午4:01
+@Author: GeChao
+@File: retrieve_service.py
+"""
+
+from app.modules.sop.rag.pipeline.merger import auto_merge_chunks
+from app.modules.sop.rag.pipeline.reranker import rerank_documents
+from app.modules.sop.rag.pipeline.vector_retriever import vector_retrieve
+from app.modules.sop.utils.doc_normalizer import normalize_docs
+
+
+# 文档检索
+def retrieve_documents(query: str, top_k: int = 5) -> dict:
+    # 先检索2倍文档
+    candidate_k = top_k * 2
+    docs, retrieve_meta = vector_retrieve(query, candidate_k)
+    docs = normalize_docs(docs)
+    docs, rerank_meta = rerank_documents(query, docs, max_docs=len(docs))
+    docs = normalize_docs(docs)
+    docs, merge_meta = auto_merge_chunks(docs, top_k)
+    docs = normalize_docs(docs)
+
+    # d: str , -> dict
+    # 添加最终排名
+    for index, doc in enumerate(docs):
+        doc["final_rank"] = index + 1
+
+    meta = {}
+    meta.update(retrieve_meta)
+    meta.update(merge_meta)
+    meta.update(rerank_meta)
+
+    meta["final_k"] = len(docs)
+
+    return {
+        "docs": docs[:top_k],
+        "meta": meta,
+    }

@@ -1,4 +1,4 @@
-# FastStack - Backend
+# SopFast - Backend
 
 基于 FastAPI 框架构建的企业级后端架构，为前端 Vue3 管理系统提供完整的 API 服务支持。
 
@@ -61,7 +61,7 @@ modules/<模块>/<子域>/
 └── param.py         # 参数模型 - 请求参数
 ```
 
-分包理念（按业务竖切 vs 按技术层次分包）详见 [项目概述](https://service.faststack.com/guide/overview)。
+分包理念（按业务竖切 vs 按技术层次分包）详见 [项目概述](https://service.sopfast.com/guide/overview)。
 
 ## 快速开始
 

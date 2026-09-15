@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FastStack 脚手架: 从当前仓库复制出一个新项目并完成改名初始化
+# SopFast 脚手架: 从当前仓库复制出一个新项目并完成改名初始化
 # 用法: ./init-project.sh <新项目名>   (小写字母/数字/中划线, 如 my-crm)
 # 产物: ../<新项目名>/ 已 git init(未提交); .env 等生成文件不带过去, 首次 ./run.sh 重建
 set -euo pipefail
@@ -9,7 +9,7 @@ NAME="${1:?用法: ./init-project.sh <新项目名> (小写字母/数字/中划�
 DB_NAME="${NAME//-/_}"
 SRC="$(pwd)"
 DEST="$(cd .. && pwd)/$NAME"
-[ "$SRC" != "$DEST" ] || { echo "错误: 请在 FastStack 仓库根目录执行"; exit 1; }
+[ "$SRC" != "$DEST" ] || { echo "错误: 请在 SopFast 仓库根目录执行"; exit 1; }
 [ -e "$DEST" ] && { echo "错误: 已存在 $DEST"; exit 1; }
 command -v rsync >/dev/null || { echo "错误: 缺少 rsync"; exit 1; }
 
@@ -25,11 +25,11 @@ rsync -a \
 
 echo "[2/4] 替换标识: 容器名前缀 fva- -> $NAME-, 库名 -> $DB_NAME, 前端标题 -> $NAME ..."
 sed -i "s/fva-/$NAME-/g" "$DEST/docker-compose.yaml"
-sed -i "s/MYSQL_DATABASE=faststack/MYSQL_DATABASE=$DB_NAME/" "$DEST/docker-compose.yaml"
+sed -i "s/MYSQL_DATABASE=sopfast_mysql/MYSQL_DATABASE=$DB_NAME/" "$DEST/docker-compose.yaml"
 sed -i "s/^DATABASE_NAME = .*/DATABASE_NAME = $DB_NAME/" "$DEST/backend/env/.env.example"
 sed -i "s/^VITE_APP_TITLE = .*/VITE_APP_TITLE = $NAME/" \
     "$DEST/frontend/web/.env.development.example" "$DEST/frontend/web/.env.production.example"
-sed -i "s/\"name\": \"faststack\"/\"name\": \"$DB_NAME\"/" "$DEST/frontend/web/package.json"
+sed -i "s/\"name\": \"sopfast\"/\"name\": \"$DB_NAME\"/" "$DEST/frontend/web/package.json"
 
 echo "[3/4] git init..."
 git -C "$DEST" init -b master -q

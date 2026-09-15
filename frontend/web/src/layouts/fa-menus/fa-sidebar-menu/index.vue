@@ -86,6 +86,7 @@
         >
           {{ sidebarTitle }}
         </p>
+        <span v-if="!isDualMenu && menuOpen" class="sidebar-product-subtitle"></span>
       </div>
       <ElScrollbar :style="scrollbarStyle">
         <ElMenu
@@ -526,6 +527,19 @@ watch(menuOpen, (isMenuOpen: boolean) => {
         left: 25px;
         margin: auto;
       }
+    }
+
+    .sidebar-product-subtitle {
+      position: absolute;
+      top: 34px;
+      left: 68px;
+      overflow: hidden;
+      color: var(--theme-color);
+      font-size: 9px;
+      font-weight: 650;
+      line-height: 1;
+      letter-spacing: 0.2px;
+      white-space: nowrap;
     }
   }
 

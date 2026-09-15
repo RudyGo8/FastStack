@@ -1,9 +1,9 @@
 ---
-name: "faststack-dev"
-description: "FastStack (based on FastapiAdmin) full-stack dev guide: repo map, run/verify commands, backend module & frontend web conventions. Invoke before writing code, creating modules/pages, debugging, or running builds/tests in this repo."
+name: "sopfast-dev"
+description: "SopFast (based on FastapiAdmin) full-stack dev guide: repo map, run/verify commands, backend module & frontend web conventions. Invoke before writing code, creating modules/pages, debugging, or running builds/tests in this repo."
 ---
 
-# FastStack 全栈开发指南
+# SopFast 全栈开发指南
 
 在本仓库做任何开发、调试、构建之前，先按本 skill 对齐工程结构与约定，避免跨端改漏、命名错位。
 
@@ -135,7 +135,7 @@ pnpm build        # 构建
 
 ## 8. 已知注意点
 
-- 静态前端托管：`register_frontend`（`app/__init__.py`）检查与挂载必须用同一个 `path_conf.FRONTEND_DIST_DIR`（backend/dist）。曾因检查用 path_conf、挂载硬编码 `frontend/web/dist` 导致 500：`check_dir=False` 时启动不报错，**首次请求才炸**，必须看 loguru 日志（`backend/logs/faststack.log`）才能定位
+- 静态前端托管：`register_frontend`（`app/__init__.py`）检查与挂载必须用同一个 `path_conf.FRONTEND_DIST_DIR`（backend/dist）。曾因检查用 path_conf、挂载硬编码 `frontend/web/dist` 导致 500：`check_dir=False` 时启动不报错，**首次请求才炸**，必须看 loguru 日志（`backend/logs/sopfast.log`）才能定位
 - 模板/脚本里不要用 `{% for %}` + `{% set %}` 累计布尔标志：Jinja2 for 块作用域隔离，循环外读到的仍是初值。用过滤器一次性计算，如 `{% set has_x = columns | selectattr('python_type', 'equalto', 'date') | list | length > 0 %}`（代码生成器 schema.py.jinja2 曾因此漏生成 validator import，生成产物 NameError、后端起不来）
 - 跨端需求（web + 小程序）要同时评估 `frontend/web` 与 `frontend/app` 两套代码，API 层各自维护
 - 小程序侧有自己的 skills（`frontend/app/.agents/skills/`），改小程序 UI 时遵循 wot-ui 约定

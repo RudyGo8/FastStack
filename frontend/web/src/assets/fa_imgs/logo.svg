@@ -6,9 +6,9 @@
   xmlns="http://www.w3.org/2000/svg"
 >
   <defs>
-    <!-- FastStack 主渐变 -->
+    <!-- SopFast 主渐变 -->
     <linearGradient
-      id="faststack_gradient"
+      id="sopfast_gradient"
       x1="220"
       y1="260"
       x2="860"
@@ -77,7 +77,7 @@
       L498.848 411.545
       Z
     "
-    fill="url(#faststack_gradient)"
+    fill="url(#sopfast_gradient)"
   />
 
   <path
@@ -127,7 +127,7 @@
       C615 303 620 300 626 300
       Z
     "
-    fill="url(#faststack_gradient)"
+    fill="url(#sopfast_gradient)"
   />
 
   <!-- 中层 -->
@@ -144,7 +144,7 @@
       C537 462 542 459 548 459
       Z
     "
-    fill="url(#faststack_gradient)"
+    fill="url(#sopfast_gradient)"
   />
 
   <!-- 底层 -->
@@ -161,7 +161,7 @@
       C615 621 620 618 626 618
       Z
     "
-    fill="url(#faststack_gradient)"
+    fill="url(#sopfast_gradient)"
   />
 
   <!-- 上层 → 中层连接 -->
@@ -176,7 +176,7 @@
       L565 406
       Z
     "
-    fill="url(#faststack_gradient)"
+    fill="url(#sopfast_gradient)"
   />
 
   <!-- 中层 → 底层连接 -->
@@ -190,7 +190,7 @@
       C791 567 787 565 781 565
       Z
     "
-    fill="url(#faststack_gradient)"
+    fill="url(#sopfast_gradient)"
   />
 
   <!-- 蓝色光泽 -->

@@ -7,7 +7,7 @@
     - #app-global   ← 全局浮层层（Toast、Modal、新手引导）
 -->
 <template>
-  <div class="app-layout">
+  <div class="app-layout" :class="{ 'is-sop-workspace': isSopWorkspace }">
     <!-- 水印覆盖层（FaWatermark 组件，内含 ElWatermark，通过 store watermarkVisible 控制显隐） -->
     <FaWatermark :content="userStore.basicInfo?.username || AppConfig.systemInfo.name" />
 
@@ -50,6 +50,7 @@
  *   → settingStore.showGuide=false → 后续不再显示
  */
 import { computed } from "vue";
+import { useRoute } from "vue-router";
 import { useAppStore, useSettingsStore, useUserStore } from "@stores";
 import AppConfig from "@/config";
 
@@ -58,6 +59,12 @@ defineOptions({ name: "AppLayout" });
 const appStore = useAppStore();
 const settingStore = useSettingsStore();
 const userStore = useUserStore();
+const route = useRoute();
+const isSopWorkspace = computed(() =>
+  /^\/(sop-analysis(?:\/|$)|sop(?:\/|$)|data-center(?:\/|$)|ai\/(?:chat|knowledge)(?:\/|$))/.test(
+    route.path,
+  )
+);
 
 // ── AI 助手 ──
 const enableAiAssistant = computed(() => {

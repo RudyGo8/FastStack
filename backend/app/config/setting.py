@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     # ******************* API文档配置 ****************** #
     # ================================================= #
     DEBUG: bool = True  # 调试模式
-    TITLE: str = " FastStack 🎉 "  # 文档标题
+    TITLE: str = " SopFast 🎉 "  # 文档标题
     VERSION: str = "3.0.0"  # 版本号
     DESCRIPTION: str = "一个基于fastapi、sqlalchemy、redis实现的轻量化框架"  # 文档描述
     SUMMARY: str = "接口汇总"  # 文档概述
@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     # ================================================= #
     # ******************* 登录认证配置 ****************** #
     # ================================================= #
-    SECRET_KEY: str = "faststack-dev-secret-key-do-not-use-in-production"  # JWT密钥（必须通过环境变量 SECRET_KEY 设置，无默认值）
+    SECRET_KEY: str = "sopfast-dev-secret-key-do-not-use-in-production"  # JWT密钥（必须通过环境变量 SECRET_KEY 设置，无默认值）
     ALGORITHM: str = "HS256"  # JWT算法
     ACCESS_TOKEN_EXPIRE_SECONDS: int = 60 * 60 * 12  # access_token过期时间(秒)12 小时
     REFRESH_TOKEN_EXPIRE_SECONDS: int = 60 * 60 * 12  # refresh_token过期时间(秒)12 小时
@@ -101,7 +101,7 @@ class Settings(BaseSettings):
     DATABASE_PORT: int = 3306
     DATABASE_USER: str = "root"
     DATABASE_PASSWORD: str = ""
-    DATABASE_NAME: str = "faststack"
+    DATABASE_NAME: str = "sopfast_mysql"
 
     # ================================================= #
     # ******************** Redis配置 ******************* #

@@ -1,0 +1,23 @@
+"""
+@create_time: 2025/11/02
+@Author: GeChao
+@File: db_chat_message.py
+"""
+
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy.orm import relationship
+
+from app.modules.sop.database import Base
+
+
+class ChatMessage(Base):
+    __tablename__ = "db_chat_message"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    session_ref_id = Column(Integer, ForeignKey("db_chat_session.id", ondelete="CASCADE"), nullable=False, index=True)
+    message_type = Column(String(20), nullable=False)
+    content = Column(Text, nullable=False)
+    rag_trace = Column(JSON, nullable=True)
+    create_time = Column(DateTime, server_default=func.now(), nullable=False)
+
+    session = relationship("ChatSession", back_populates="messages")

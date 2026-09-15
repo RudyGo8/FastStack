@@ -1,5 +1,5 @@
 {
-  "name": "faststack",
+  "name": "sopfast",
   "description": "Vue3 + Vite + TypeScript + Element-Plus 的后台管理模板",
   "version": "3.0.0",
   "private": true,
@@ -190,14 +190,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://gitee.com/FastStack/FastStack.git"
+    "url": "https://gitee.com/SopFast/SopFast.git"
   },
   "bugs": {
-    "url": "https://gitee.com/FastStack/FastStack/issues"
+    "url": "https://gitee.com/SopFast/SopFast/issues"
   },
-  "author": "FastStack",
+  "author": "SopFast",
   "license": "MIT",
-  "homepage": "https://gitee.com/FastStack/FastStack",
+  "homepage": "https://gitee.com/SopFast/SopFast",
   "browserslist": [
     "Chrome >= 84",
     "Firefox >= 83",

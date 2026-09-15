@@ -7,6 +7,7 @@ from app.core.base_schema import AuthSchema, BatchSetAvailable, PageResultSchema
 from app.core.exceptions import CustomException
 from app.modules.system.dept.crud import DeptCRUD
 from app.modules.system.menu.crud import MenuCRUD
+from app.modules.sop.menu_sync import get_sop_menu_ids
 from app.utils.common_util import search_to_dict
 from app.utils.excel_util import ExcelUtil
 
@@ -112,6 +113,7 @@ class RoleService:
             raise CustomException(msg="创建失败，编码已存在")
 
         new_role = await RoleCRUD(self.auth, self.db).create(data=data)
+        await self._set_role_menus(role_ids=[new_role.id], menu_ids=[])
         return await self.detail(id=new_role.id)
 
     async def update(self, id: int, data: RoleUpdateSchema) -> RoleOutSchema:
@@ -177,9 +179,11 @@ class RoleService:
     async def _set_role_menus(self, role_ids: list[int], menu_ids: list[int]) -> None:
         """替换角色菜单关联：service 校验存在性，CRUD 只负责持久化。"""
         roles = await self._load_roles(role_ids, preload=["menus"])
-        menus = [] if not menu_ids else await MenuCRUD(self.auth, self.db).get_list(search={"id": ("in", menu_ids)})
-        if menu_ids and len(menus) != len(set(menu_ids)):
-            missing = sorted(set(menu_ids) - {m.id for m in menus})
+        effective_menu_ids = set(menu_ids)
+        effective_menu_ids.update(await get_sop_menu_ids(self.db))
+        menus = [] if not effective_menu_ids else await MenuCRUD(self.auth, self.db).get_list(search={"id": ("in", sorted(effective_menu_ids))})
+        if effective_menu_ids and len(menus) != len(effective_menu_ids):
+            missing = sorted(effective_menu_ids - {m.id for m in menus})
             raise CustomException(msg=f"菜单不存在: {missing}")
         await RoleCRUD(self.auth, self.db).set_role_menus_crud(role_objs=roles, menu_objs=menus)
 

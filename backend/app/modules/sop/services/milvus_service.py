@@ -1,0 +1,156 @@
+"""
+@create_time: 2026/01/31
+@Author: GeChao
+@File: milvus_service.py
+"""
+
+from pymilvus import AnnSearchRequest, DataType, MilvusClient, RRFRanker
+
+from app.modules.sop.config import EMBEDDING_DIM, MILVUS_COLLECTION, MILVUS_HOST, MILVUS_PORT
+from app.modules.sop.utils.log import get_logger
+
+logger = get_logger(__name__)
+
+
+class MilvusService:
+    def __init__(self):
+        self.host = MILVUS_HOST
+        self.port = MILVUS_PORT
+        self.collection_name = MILVUS_COLLECTION
+        self.uri = f"http://{self.host}:{self.port}"
+        self.client = None
+
+    def _get_client(self):
+        if self.client is None:
+            self.client = MilvusClient(uri=self.uri)
+        return self.client
+
+    def init_collection(self, dense_dim: int = EMBEDDING_DIM, force_recreate: bool = False):
+        client = self._get_client()
+        # 如果强制重建或者collection不存在，就创建collection
+        if force_recreate or not client.has_collection(self.collection_name):
+            if client.has_collection(self.collection_name):
+                try:
+                    client.drop_collection(self.collection_name)
+                except Exception:
+                    logger.warning("Failed to drop collection", collection=self.collection_name)
+
+            # 创建结构，添加字段
+            schema = client.create_schema(auto_id=True, enable_dynamic_field=True)
+            schema.add_field("id", DataType.INT64, is_primary=True, auto_id=True)
+            schema.add_field("dense_embedding", DataType.FLOAT_VECTOR, dim=dense_dim)
+            schema.add_field("sparse_embedding", DataType.SPARSE_FLOAT_VECTOR)
+            schema.add_field("text", DataType.VARCHAR, max_length=2000)
+            schema.add_field("filename", DataType.VARCHAR, max_length=255)
+            schema.add_field("file_type", DataType.VARCHAR, max_length=50)
+            schema.add_field("page_number", DataType.INT64)
+            schema.add_field("chunk_id", DataType.VARCHAR, max_length=512)
+            schema.add_field("parent_chunk_id", DataType.VARCHAR, max_length=512)
+            schema.add_field("chunk_level", DataType.INT64)
+
+            # 创建索引参数
+            index_params = client.prepare_index_params()
+            # dense索引： HNSW 近似最近邻搜索索引、内积相似度、图索引每个节点连数量16个、搜索宽度256
+            index_params.add_index(field_name="dense_embedding", index_type="HNSW", metric_type="IP", params={"M": 16, "efConstruction": 256})
+            # sparse索引：SPARSE_INVERTED_INDEX倒排索引、内积相似度、丢弃部分低权重项0.2
+            index_params.add_index(field_name="sparse_embedding", index_type="SPARSE_INVERTED_INDEX", metric_type="IP", params={"drop_ratio_build": 0.2})
+
+            client.create_collection(collection_name=self.collection_name, schema=schema, index_params=index_params)
+
+        try:
+            # 加载到内存，持久化
+            client.load_collection(self.collection_name)
+        except Exception:
+            logger.warning("Failed to load collection", collection=self.collection_name)
+
+    def insert(self, data: list[dict]):
+        return self._get_client().insert(self.collection_name, data)
+
+    def query(self, filter_expr: str = "", output_fields: list = None, limit: int = 100):
+        return self._get_client().query(collection_name=self.collection_name, filter=filter_expr, output_fields=output_fields or ["filename", "file_type", "text", "chunk_id"], limit=limit)
+
+    def delete(self, filter_expr: str):
+        return self._get_client().delete(collection_name=self.collection_name, filter=filter_expr)
+
+    def hybrid_search(self, dense_embedding: list[float], sparse_embedding: dict, top_k: int = 5) -> list[dict]:
+        output_fields = ["text", "filename", "file_type", "page_number", "chunk_id", "parent_chunk_id", "chunk_level"]
+
+        dense_search = AnnSearchRequest(
+            data=[dense_embedding],
+            anns_field="dense_embedding",
+            param={"metric_type": "IP", "params": {"ef": 64}},
+            limit=top_k * 2,
+        )
+        sparse_search = AnnSearchRequest(
+            data=[sparse_embedding],
+            anns_field="sparse_embedding",
+            param={"metric_type": "IP", "params": {"drop_ratio_search": 0.2}},
+            limit=top_k * 2,
+        )
+
+        # 倒数排序融合 ：排名越靠前，分值越大：
+        reranker = RRFRanker(k=60)
+
+        try:
+            results = self._get_client().hybrid_search(collection_name=self.collection_name, reqs=[dense_search, sparse_search], ranker=reranker, limit=top_k, output_fields=output_fields)
+
+            formatted = []
+            for hits in results:
+                for hit in hits:
+                    formatted.append(
+                        {
+                            "text": hit.get("text", ""),
+                            "filename": hit.get("filename", ""),
+                            "file_type": hit.get("file_type", ""),
+                            "page_number": hit.get("page_number"),
+                            "chunk_id": hit.get("chunk_id", ""),
+                            "parent_chunk_id": hit.get("parent_chunk_id", ""),
+                            "chunk_level": hit.get("chunk_level"),
+                            "score": hit.get("distance", 0.0),
+                        }
+                    )
+            return formatted
+        except Exception:
+            logger.exception("Hybrid search failed, falling back to dense")
+            return self.dense_search(dense_embedding, top_k)
+
+    def dense_search(self, dense_embedding: list[float], top_k: int = 5) -> list[dict]:
+        results = self._get_client().search(
+            collection_name=self.collection_name,
+            data=[dense_embedding],
+            anns_field="dense_embedding",
+            search_params={"metric_type": "IP", "params": {"ef": 64}},
+            limit=top_k,
+            output_fields=["text", "filename", "file_type", "page_number", "chunk_id", "parent_chunk_id", "chunk_level"],
+        )
+
+        formatted = []
+        for hits in results:
+            for hit in hits:
+                entity = hit.get("entity", {}) if isinstance(hit, dict) else hit
+                if hasattr(hit, "entity"):
+                    entity = hit.entity
+                text = entity.get("text", "") if isinstance(entity, dict) else ""
+                filename = entity.get("filename", "") if isinstance(entity, dict) else ""
+                file_type = entity.get("file_type", "") if isinstance(entity, dict) else ""
+                page_number = entity.get("page_number") if isinstance(entity, dict) else None
+                chunk_id = entity.get("chunk_id", "") if isinstance(entity, dict) else ""
+                parent_chunk_id = entity.get("parent_chunk_id", "") if isinstance(entity, dict) else ""
+                chunk_level = entity.get("chunk_level") if isinstance(entity, dict) else None
+                score = hit.get("distance", 0.0) if isinstance(hit, dict) else getattr(hit, "distance", 0.0)
+                formatted.append(
+                    {
+                        "text": text,
+                        "filename": filename,
+                        "file_type": file_type,
+                        "page_number": page_number,
+                        "chunk_id": chunk_id,
+                        "parent_chunk_id": parent_chunk_id,
+                        "chunk_level": chunk_level,
+                        "score": score,
+                    }
+                )
+        return formatted
+
+
+milvus_service = MilvusService()

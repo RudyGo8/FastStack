@@ -97,7 +97,7 @@ class SSEConnectionManager:
 
     @property
     def _channel_name(self) -> str:
-        return f"faststack:sse:{self._channel}"
+        return f"sopfast:sse:{self._channel}"
 
     async def _relay(self, target: dict[str, Any], data: dict[str, Any]) -> None:
         """推送一条消息：先投本进程命中连接，再发布到 Redis 供其它 worker 投递。

@@ -1,94 +1,83 @@
 import { request } from "@utils";
-import { createSSEClient, httpEndpoint, type SSEClient } from "@utils/sse";
-import { $t } from "@/locales";
 
-const API_PATH = "/monitor/online";
+const API_PATH = "/monitor/dashboard";
 
-/** 健康卡片列表项（数据库 / Redis 连通状态） */
-export interface HealthItem {
-  icon: string;
-  class: string;
-  title: string;
-  status: string;
-  time: string;
+/** 分布统计项 */
+export interface DistributionItem {
+  name: string;
+  value: number;
 }
 
-export interface RecentLoginItem {
-  username: string;
-  status: number; // 1:成功 2:失败
-  login_time: string;
-  login_ip?: string;
-  login_location?: string;
+/** 工作台统计卡片数据 */
+export interface DashboardStatistics {
+  notice_published: number;
+  notice_total: number;
+  today_logins: number;
+  week_logins: number;
+  today_operations: number;
+  week_operations: number;
 }
 
-export interface DashboardStats {
-  online_users: number;
-  total_users: number;
-  today_login_count: number;
-  today_unique_users: number;
-  week_user_created: number;
-  recent_logins: RecentLoginItem[];
+/** 登录统计数据（近 7 天） */
+export interface LoginStatistics {
+  os_distribution: DistributionItem[];
+  browser_distribution: DistributionItem[];
+  location_distribution: DistributionItem[];
+}
+
+/** 登录趋势系列 */
+export interface LoginTrendSeries {
+  name: string;
+  data: number[];
+}
+
+/** 登录趋势数据（近 7 天，按日聚合） */
+export interface LoginTrend {
+  dates: string[];
+  login_counts: number[];
+  location_series: LoginTrendSeries[];
+}
+
+/** 操作统计数据（近 7 天） */
+export interface OperationStatistics {
+  dates: string[];
+  type_distribution: DistributionItem[];
+  daily_trend: number[];
+  module_distribution: DistributionItem[];
 }
 
 const DashboardAPI = {
-  getStats() {
-    return request<ApiResponse<DashboardStats>>({
-      url: `${API_PATH}/stats`,
+  /** 工作台统计卡片：通知 + 今日/近 7 天登录与操作 */
+  getStatistics() {
+    return request<ApiResponse<DashboardStatistics>>({
+      url: `${API_PATH}/statistics`,
       method: "get",
     });
   },
 
-  /**
-   * 订阅系统健康实时流（SSE，30s 一拍，免认证）
-   * 返回取消订阅函数；连接断开后客户端内部自动重连
-   */
-  subscribeHealthStream(onItems: (items: HealthItem[]) => void): () => void {
-    const client = createSSEClient({
-      url: new URL(
-        "/api/v1/monitor/health/stream",
-        httpEndpoint(import.meta.env.VITE_APP_WS_ENDPOINT)
-      ).toString(),
-      getToken: () => null, // 健康端点免认证，与 /check 一致
-      onEvent: (_event, data) => {
-        try {
-          onItems(mapReadinessToHealthItems(JSON.parse(data)));
-        } catch {
-          /* ignore */
-        }
-      },
+  /** 近 7 天登录的操作系统 / 浏览器 / 地区分布 */
+  getLoginStatistics() {
+    return request<ApiResponse<LoginStatistics>>({
+      url: `${API_PATH}/login/statistics`,
+      method: "get",
     });
-    return () => client.disconnect();
+  },
+
+  /** 近 7 天登录趋势：每日总次数 + Top 地区每日系列 */
+  getLoginTrend() {
+    return request<ApiResponse<LoginTrend>>({
+      url: `${API_PATH}/login/trend`,
+      method: "get",
+    });
+  },
+
+  /** 近 7 天操作统计：类型分布 / 每日趋势 / 模块分布 */
+  getOperationStatistics() {
+    return request<ApiResponse<OperationStatistics>>({
+      url: `${API_PATH}/operation/statistics`,
+      method: "get",
+    });
   },
 };
 
 export default DashboardAPI;
-
-/** 健康 SSE 载荷（对应后端 ServiceInfoOut：进程 + DB / Redis 连通状态） */
-interface ServiceInfoPayload {
-  db_status: number;
-  redis_status: number;
-}
-
-const OK_ITEM_CLASS = "bg-success/12 text-success";
-const ERROR_ITEM_CLASS = "bg-error/12 text-error";
-
-function dependencyItem(title: string, icon: string, status: number): HealthItem {
-  const ok = status === 1;
-  return {
-    icon,
-    class: ok ? OK_ITEM_CLASS : ERROR_ITEM_CLASS,
-    title,
-    status: ok ? $t("home.statusNormal") : $t("home.statusAbnormal"),
-    time: "",
-  };
-}
-
-/** 健康载荷 → 健康卡片列表（数据库 / Redis） */
-function mapReadinessToHealthItems(payload: ServiceInfoPayload): HealthItem[] {
-  return [
-    dependencyItem($t("home.database"), "ri:database-2-line", payload.db_status),
-    dependencyItem($t("home.redis"), "ri:server-line", payload.redis_status),
-  ];
-}
-
-export type { SSEClient };

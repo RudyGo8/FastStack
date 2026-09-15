@@ -18,6 +18,7 @@ from app.modules.system.params.model import ParamsModel
 from app.modules.system.role.model import RoleModel, RoleMenusModel
 from app.modules.system.user.model import UserModel, UserRolesModel
 from app.modules.system.versions.model import VersionModel
+from app.modules.sop.menu_sync import reconcile_ai_menus, reconcile_sop_menus
 from app.modules.task.cronjob.node.model import NodeModel
 from app.modules.task.storage.node.model import StorageNodeModel
 from app.utils.import_util import ImportUtil
@@ -199,6 +200,14 @@ class InitializeData:
 
         if skipped:
             logger.info(f"⏭️  {len(skipped)} 张表已有数据，跳过初始化：{', '.join(skipped)}")
+
+        sop_menu_ids = await reconcile_sop_menus(db)
+        ai_menu_ids = await reconcile_ai_menus(db)
+        from app.modules.sop.menu_sync import grant_all_menus_by_role
+        await grant_all_menus_by_role(db, sop_menu_ids, ai_menu_ids)
+        sop_all = sop_menu_ids[True] | sop_menu_ids[False]
+        ai_all = ai_menu_ids[True] | ai_menu_ids[False]
+        logger.info(f"✅️ 菜单已同步：S&OP {len(sop_all)} 节点（管理员 {len(sop_menu_ids[True])} 专属）、AI 助手 {len(ai_all)} 节点（管理员 {len(ai_menu_ids[True])} 专属），角色差异化授权完成")
 
     @staticmethod
     async def __create_dict_data_objs(db: AsyncSession, data: list[dict]) -> list[DictDataModel]:

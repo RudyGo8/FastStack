@@ -1,0 +1,8 @@
+# 见 docs/PLUGIN_ARCHITECTURE.md
+
+name = "sop"
+title = "S&OP 智能分析"
+version = "1.0.0"
+description = "S&OP 产销协同：知识库问答(RAG)、文档管理、数据接入、快照报告；路由由 app/api/v1/routers.py 统一注册。"
+optional = true
+tags = ["sop", "rag", "langgraph", "milvus"]

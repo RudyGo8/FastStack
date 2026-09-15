@@ -1,10 +1,10 @@
-<div align="center">
-     <p align="center">
-          <img src="./frontend/web/public/logo.png" width="150" height="150" alt="logo" />
+<div align=”center”>
+     <p align=”center”>
+          <img src=”./frontend/web/public/logo.png” width=”150” height=”150” alt=”logo” />
      </p>
-     <h1>FastStack</h1>
-     <p>个人全栈脚手架：FastAPI + Vue3 + TypeScript + MySQL + Redis + Milvus</p>
-     <p>基于开源项目 <a href="https://github.com/fastapiadmin/FastapiAdmin">FastapiAdmin</a> 精简而来，MIT 协议</p>
+     <h1>SopFast</h1>
+     <p>S&OP 智能分析平台：FastAPI + Vue3 + MySQL + Redis + Milvus</p>
+     <p>基于 <a href=”https://github.com/fastapiadmin/FastapiAdmin”>FastapiAdmin</a> 脚手架，融合 SopAgent 业务能力</p>
 </div>
 
 ## 快速开始
@@ -28,18 +28,39 @@ cd ../frontend/web && pnpm install && pnpm run dev
 | Web 前端 | `http://127.0.0.1:5180` |
 | 后端接口 | `http://127.0.0.1:8001` |
 | Swagger | `http://127.0.0.1:8001/docs` |
-| Attu | `http://127.0.0.1:8082` |
+| Attu (Milvus) | `http://127.0.0.1:8083` |
 
 默认账号为 `super`、`admin`、`user`，密码均为 `123456`。部署后请立即修改。
 
 首次执行 `./run.sh` 会生成开发配置：
 
-- `backend/env/.env.dev`：MySQL `3307/123456`、Redis `6380`（无密码）、随机 `SECRET_KEY`
+- `backend/env/.env.dev`：MySQL `3309/123456`、Redis `6381`（无密码）、随机 `SECRET_KEY`
 - `frontend/web/.env.development`：Web 前端联调配置
+
+### SOP 模块
+
+S&OP 业务功能位于 `backend/app/modules/sop/`，包含：
+
+- **智能问答**：RAG 知识库 + Agent 流式对话（SSE）
+- **数据中心**：数据源管理、Excel 导入、同步状态
+- **知识库**：文档上传/管理、向量检索
+- **指标分析**：SPU 维度查询与分析
+- **会议报告**：快照生成、docx 导出
+- **市场热点**：外部市场数据接入（待配置数据源）
+
+通过 `.env` 中的 `SOP_ENABLE=false` 可关闭 SOP 后台任务（MCP 热插拔、夜间快照调度）。
+
+#### 菜单与权限
+
+S&OP 菜单在每次后端启动时**幂等对账**：由 `menu_sync.py` 声明 16 个节点（1 目录 + 7 页面 + 8 按钮），按 `route_name` / `permission` 稳定键查找并增量创建/更新，然后自动授权给所有现有角色。管理员无法通过角色权限设置页移除 S&OP 权限，新建角色也会自动继承。
+
+#### 升级说明
+
+从旧版本升级时**无需清空 Docker volumes**：启动后端即自动完成菜单对账和全角色授权。已有会话需重新登录以获取最新菜单。
 
 ### 开发数据目录
 
-根目录的 `docker-compose.yaml` 负责开发基础设施，数据默认保存在：
+根目录的 `docker-compose.yaml` 负责开发基础设施，容器名以 `sop_` 前缀隔离，数据默认保存在：
 
 ```text
 volumes/
@@ -67,40 +88,38 @@ DOCKER_VOLUME_DIRECTORY=/volumes
 ## 工程结构
 
 ```text
-FastStack/
-├── backend/                  # FastAPI 后端
+SopFast/
+├── backend/
+│   ├── app/
+│   │   ├── modules/
+│   │   │   ├── sop/          # S&OP 业务模块（Agent/RAG/Tools/Tracing）
+│   │   │   ├── system/       # 系统管理（用户/角色/菜单/字典等）
+│   │   │   ├── ai/           # AI 对话模块
+│   │   │   └── ...           # 监控/任务/代码生成等
+│   │   └── core/             # 框架核心（数据库/缓存/权限/调度）
+│   ├── env/                  # 环境变量配置
+│   └── sql/                  # 菜单/权限种子数据
 ├── frontend/
-│   ├── web/                 # Vue3 管理后台
-│   └── app/                 # UniApp 移动端
-├── docker/                  # 生产部署配置
-│   └── docker-compose.yaml  # MySQL、Redis、Backend、Nginx
-├── volumes/                 # 本地开发数据（不提交 Git）
-├── docker-compose.yaml      # 本地开发基础设施
-├── run.sh                   # WSL / Linux 一键开发
-├── deploy.sh                # 生产部署
-└── init-project.sh          # 从当前脚手架复制新项目
+│   └── web/                  # Vue3 管理后台
+│       └── src/views/module_sop/  # SOP 7 个页面
+├── docker/                   # 生产部署配置
+│   └── docker-compose.yaml
+├── volumes/                  # 本地开发数据（不提交 Git）
+├── docker-compose.yaml       # 本地开发基础设施（sop_* 容器）
+├── run.sh                    # 一键开发启动
+└── deploy.sh                 # 生产部署
 ```
 
-本地开发和生产部署使用不同的 Compose 文件：
+## 基础设施端口
 
-- 根目录 `docker-compose.yaml`：本地开发，只启动基础设施。
-- `docker/docker-compose.yaml`：生产部署，启动数据库、后端和 Nginx。
+开发环境使用独立端口，避免与其他项目冲突：
 
-## 文档导航
-
-- [后端开发](backend/README.md)
-- [Web 前端开发](frontend/web/README.md)
-- [移动端开发](frontend/app/README.md)
-- [生产部署](docker/README.md)
-- [工程开发约定](SKILL.md)
-
-## 衍生新项目
-
-```bash
-./init-project.sh my-project
-```
-
-脚本会复制到 `../my-project`，修改容器名前缀、数据库名和前端标题，并初始化新的 Git 仓库；依赖、环境变量和 `volumes/` 数据不会被复制。
+| 服务 | 端口 |
+| --- | --- |
+| MySQL | 3309 |
+| Redis | 6381 |
+| Milvus | 19532 |
+| Attu | 8083 |
 
 ## 生产部署
 
@@ -113,6 +132,6 @@ cp docker/.env.example docker/.env
 
 生产部署的完整说明见 [docker/README.md](docker/README.md)。
 
-## 开发约定
+## 集成对账
 
-写代码前先阅读 [SKILL.md](SKILL.md)。新业务模块的常用流程是：建表 → 使用后台“代码生成”功能生成前后端代码 → 按需求微调。
+SopAgent 原始业务能力在 SopFast 中的恢复状态见 [docs/sopagent-parity.md](docs/sopagent-parity.md)。

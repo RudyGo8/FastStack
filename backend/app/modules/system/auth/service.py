@@ -204,7 +204,7 @@ class LoginService:
             )
 
         auth = AuthSchema()
-        user = await UserCRUD(auth, db).get(username=login_form.username, preload=["roles", "roles.menus"])
+        user = await UserCRUD(auth, db).get(username=login_form.username)
 
         if not user:
             await _write_login_log(
@@ -301,8 +301,6 @@ class LoginService:
     def _build_session_dict(
         user: UserModel,
         session_id: str,
-        permissions: list[str],
-        menu_ids: list[int],
         request_ip: str,
         login_location: str | None,
         ua_result: Any,
@@ -313,8 +311,6 @@ class LoginService:
         参数:
         - user (UserModel): 用户对象
         - session_id (str): 会话ID
-        - permissions (list[str]): 权限标识列表
-        - menu_ids (list[int]): 菜单ID列表
         - request_ip (str): 请求IP
         - login_location (str): 登录地点
         - ua_result: User-Agent 解析结果
@@ -335,8 +331,6 @@ class LoginService:
             "email": user.email,
             "gender": user.gender,
             "avatar": user.avatar,
-            "permissions": permissions,
-            "menu_ids": menu_ids,
             "ipaddr": request_ip,
             "login_location": login_location,
             "os": ua_result.os.family if ua_result.os else "Unknown",
@@ -371,13 +365,9 @@ class LoginService:
 
         now = datetime.now()
 
-        permissions, menu_ids = LoginService._collect_permissions(user)
-
         session_dict = LoginService._build_session_dict(
             user=user,
             session_id=session_id,
-            permissions=permissions,
-            menu_ids=menu_ids,
             request_ip=request_ip,
             login_location=login_location,
             ua_result=ua_result,

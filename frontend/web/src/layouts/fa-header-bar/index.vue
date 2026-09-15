@@ -71,7 +71,7 @@
       <div id="app-header-toolbar" class="flex items-center gap-2.5">
         <!-- 搜索 -->
         <div
-          v-if="shouldShowGlobalSearch"
+          v-if="shouldShowGlobalSearch && !isSopRoute"
           class="search-bar-trigger flex items-center justify-between w-40 h-9 px-2.5 cursor-pointer border border-g-400 rounded-custom-sm max-md:hidden! transition duration-300 hover:-translate-y-0.5 hover:shadow-md"
           @click="openSearchDialog"
         >
@@ -185,7 +185,7 @@
 <script setup lang="ts">
 import { LanguageEnum, MenuTypeEnum } from "@/enums/appEnum";
 import { useI18n } from "vue-i18n";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useFullscreen, useWindowSize } from "@vueuse/core";
 
 import {
@@ -210,6 +210,12 @@ defineOptions({ name: "FaHeaderBar" });
 const isWindows = navigator.userAgent.includes("Windows");
 
 const router = useRouter();
+const route = useRoute();
+const isSopRoute = computed(() =>
+  /^\/(sop-analysis(?:\/|$)|sop(?:\/|$)|data-center(?:\/|$)|ai\/(?:chat|knowledge)(?:\/|$))/.test(
+    route.path,
+  )
+);
 const { locale, t } = useI18n();
 const { width } = useWindowSize();
 

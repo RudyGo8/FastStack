@@ -16,7 +16,6 @@ import { setPageTitle, setWorktab } from "@utils/navigation";
 import { MenuProcessor } from "./MenuProcessor";
 import { NProgress } from "@utils/ui";
 import { Auth } from "@utils/auth";
-import { isHttpError, ApiStatus } from "@utils/http";
 import { refreshState } from "./refresh";
 import { getMainScrollEl } from "@/hooks/core/useCommon";
 
@@ -65,9 +64,10 @@ export function setupBeforeEachGuard(router: Router): void {
       return isLoginRoute(to) ? true : "/login";
     }
 
-    // 路由初始化失败 → 跳转 500
+    // 路由初始化失败 → 重置状态并跳转登录页（后端未就绪/token 异常等均可重试）
     if (refreshState.routeInitFailed && !isAnonymousPublicPath(to.path)) {
-      return "/500";
+      refreshState.routeInitFailed = false;
+      return "/login";
     }
 
     // 已登录、动态路由未注册 → 加载
@@ -185,16 +185,9 @@ async function handleDynamicRoutes(
     return undefined;
   } catch (error) {
     console.error("[路由守卫] 路由初始化失败:", error);
-    // 认证失败（如生产环境部署后旧 token 失效）跳转登录页，不标记为路由初始化失败
-    if (
-      isHttpError(error) &&
-      (error.code === ApiStatus.unauthorized || error.code === ApiStatus.forbidden)
-    ) {
-      refreshState.dynamicRoutesRegistered = false;
-      return "/login";
-    }
-    refreshState.routeInitFailed = true;
-    return "/500";
+    // 所有初始化失败（网络错误、后端未就绪、token 失效等）均跳转登录页，不锁死在 /500
+    refreshState.dynamicRoutesRegistered = false;
+    return "/login";
   } finally {
     refreshState.pendingLoading = false;
   }

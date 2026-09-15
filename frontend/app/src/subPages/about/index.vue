@@ -18,7 +18,7 @@ const configStore = useConfigStore()
 configStore.getConfig()
 
 /** 关于页参数（来自后端系统参数，带默认值兜底；web 端消费方式：configData?.[key]?.config_value） */
-const sysName = computed(() => configStore.configData?.sys_name?.config_value?.trim() || 'FastStack')
+const sysName = computed(() => configStore.configData?.sys_name?.config_value?.trim() || 'SopFast')
 const version = computed(() => configStore.configData?.version?.config_value?.trim() || '')
 const loginSubtitle = computed(() => configStore.configData?.login_subtitle?.config_value?.trim() || '')
 const copyright = computed(() => configStore.configData?.copyright?.config_value?.trim() || '')

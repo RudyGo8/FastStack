@@ -7,6 +7,7 @@ from fastapi import Depends, Request, WebSocket
 from redis.asyncio.client import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.common.enums import RET, RedisInitKeyConfig
 from app.config.setting import settings
@@ -169,11 +170,17 @@ async def _authenticate(
         raise CustomException(msg="认证已失效", code=RET.UNAUTHORIZED.code, status_code=401)
 
     # 每请求查库校验用户仍存在且未删除：token 只证明签发时身份，不证明现在。
+    # 同时预加载角色和菜单关联，用于实时刷新权限（避免修改权限后需重新登录）。
+    from app.modules.system.role.model import RoleModel  # 延迟导入：core 导入期不依赖业务层（守卫不变式 3）
     from app.modules.system.user.model import UserModel  # 延迟导入：core 导入期不依赖业务层（守卫不变式 3）
 
     user_obj = (
         (
-            await db.execute(select(UserModel).where(UserModel.id == user_id, UserModel.is_deleted == False))  # noqa: E712
+            await db.execute(
+                select(UserModel)
+                .options(selectinload(UserModel.roles).selectinload(RoleModel.menus))
+                .where(UserModel.id == user_id, UserModel.is_deleted == False)  # noqa: E712
+            )
         )
         .scalars()
         .first()
@@ -182,10 +189,18 @@ async def _authenticate(
         raise CustomException(msg="用户不存在", code=RET.NOT_FOUND.code, status_code=401)
 
     user = CoreUserSchema.model_validate(user_obj)
+
+    # 实时从数据库刷新权限和菜单ID，确保管理员修改权限后立即生效
+    if user_obj.is_superuser:
+        permissions, menu_ids = [], []
+    else:
+        from app.modules.system.auth.service import LoginService  # 延迟导入避免循环依赖
+        permissions, menu_ids = LoginService._collect_permissions(user_obj)
+
     return AuthSchema(
         user=user,
-        permissions=user_info.get("permissions", []),
-        menu_ids=user_info.get("menu_ids", []),
+        permissions=permissions,
+        menu_ids=menu_ids,
     )
 
 

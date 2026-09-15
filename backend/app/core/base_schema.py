@@ -86,8 +86,6 @@ class SessionInfoSchema(BaseModel):
     email: str | None = Field(default=None, description="邮箱")
     gender: str | None = Field(default=None, description="性别(0:男 1:女 2:未知)")
     avatar: str | None = Field(default=None, description="头像")
-    permissions: list[str] = Field(default_factory=list, description="用户权限列表")
-    menu_ids: list[int] = Field(default_factory=list, description="菜单ID列表")
     ipaddr: str | None = Field(default=None, description="登陆IP地址")
     login_location: str | None = Field(default=None, description="登录所属地")
     os: str | None = Field(default=None, description="操作系统")

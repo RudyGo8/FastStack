@@ -36,7 +36,7 @@ interface Emits {
 const emit = defineEmits<Emits>();
 
 const promptCards = [
-  { title: "系统介绍", body: "请介绍一下FastStack系统", prompt: "请介绍一下FastStack系统" },
+  { title: "系统介绍", body: "请介绍一下SopFast系统", prompt: "请介绍一下SopFast系统" },
   { title: "开发指导", body: "如何在系统中创建新的模块？", prompt: "如何在系统中创建新的模块？" },
   {
     title: "权限管理",
