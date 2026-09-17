@@ -35,8 +35,9 @@ def _clean_dimension(value: str) -> str:
 
 
 class SopIngestionService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, *, autocommit: bool = True):
         self.db = db
+        self.autocommit = autocommit
 
     def import_spus(self, payload: SopSpuImportRequest) -> SopImportResponse:
         try:
@@ -93,7 +94,7 @@ class SopIngestionService:
                 record_count=len(payload.rows),
                 status="completed",
             )
-            self.db.commit()
+            self.db.commit() if self.autocommit else self.db.flush()
             return SopImportResponse(
                 domain="spu_mapping",
                 batch_id=payload.meta.batch_id,
@@ -317,7 +318,7 @@ class SopIngestionService:
             max_business_date=max_business_date,
             details={"rejected": rejected, "quality_issue_ids": issue_ids},
         )
-        self.db.commit()
+        self.db.commit() if self.autocommit else self.db.flush()
         return SopImportResponse(
             domain=domain,
             batch_id=meta.batch_id,

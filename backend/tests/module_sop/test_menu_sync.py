@@ -1,18 +1,18 @@
-"""S&OP 菜单增量同步与全角色授权回归测试。"""
+"""S&OP 菜单增量同步与差异化角色授权回归测试。"""
 
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from app.core.base_schema import AuthSchema
 from app.core.database import async_db_session
-from app.modules.sop.menu_sync import reconcile_sop_menus
+from app.modules.sop.menu_sync import grant_menus_by_role, reconcile_sop_menus
 from app.modules.system.menu.model import MenuModel
 from app.modules.system.role.model import RoleMenusModel, RoleModel
 from app.modules.system.role.schema import RoleCreateSchema
 from app.modules.system.role.service import RoleService
 
 
-async def test_reconcile_sop_menus_is_idempotent_and_grants_all_roles(test_client: TestClient) -> None:
+async def test_reconcile_sop_menus_is_idempotent_and_grants_user_safe_menus(test_client: TestClient) -> None:
     """捕获存量库跳过菜单种子、固定菜单 ID 导致角色未授权的问题。"""
     _ = test_client
     async with async_db_session() as db, db.begin():
@@ -25,24 +25,38 @@ async def test_reconcile_sop_menus_is_idempotent_and_grants_all_roles(test_clien
 
         first = await reconcile_sop_menus(db)
         second = await reconcile_sop_menus(db)
+        await grant_menus_by_role(db, first)
 
         assert first == second
-        assert len(first) == 16
+        all_ids = first[False] | first[True]
+        assert first[False]
+        assert first[True]
+        assert first[False].isdisjoint(first[True])
         assert await db.scalar(select(func.count()).select_from(MenuModel).where(MenuModel.id == unrelated_id)) == 1
 
         links = (
             await db.scalars(
                 select(RoleMenusModel.menu_id).where(
                     RoleMenusModel.role_id == role_id,
-                    RoleMenusModel.menu_id.in_(first),
+                    RoleMenusModel.menu_id.in_(all_ids),
                 )
             )
         ).all()
-        assert set(links) == first
+        assert set(links) == first[False]
         assert len(links) == len(set(links))
 
-        root = await db.scalar(select(MenuModel).where(MenuModel.route_name == "Sop"))
-        dashboard = await db.scalar(select(MenuModel).where(MenuModel.route_name == "SopDashboard"))
+        root = await db.scalar(
+            select(MenuModel).where(
+                MenuModel.route_name == "SopAnalysis",
+                MenuModel.is_deleted.is_(False),
+            )
+        )
+        dashboard = await db.scalar(
+            select(MenuModel).where(
+                MenuModel.route_name == "SopWorkspace",
+                MenuModel.is_deleted.is_(False),
+            )
+        )
         assert root is not None
         assert dashboard is not None
         assert dashboard.parent_id == root.id
@@ -59,24 +73,26 @@ async def test_setting_role_permissions_cannot_remove_sop(test_client: TestClien
         await db.flush()
         sop_ids = await reconcile_sop_menus(db)
 
-        await RoleService(AuthSchema(), db)._set_role_menus([role.id], [])
+        await RoleService(AuthSchema(), db)._set_role_menus(
+            [role.id], [next(iter(sop_ids[True]))]
+        )
 
         remaining = set(
             (
                 await db.scalars(
                     select(RoleMenusModel.menu_id).where(
                         RoleMenusModel.role_id == role.id,
-                        RoleMenusModel.menu_id.in_(sop_ids),
+                        RoleMenusModel.menu_id.in_(sop_ids[False] | sop_ids[True]),
                     )
                 )
             ).all()
         )
-        assert remaining == sop_ids
+        assert remaining == sop_ids[False]
         await db.rollback()
 
 
-async def test_new_role_receives_all_sop_menus(test_client: TestClient) -> None:
-    """捕获应用启动后新建角色没有 S&OP 权限的问题。"""
+async def test_new_non_admin_role_receives_only_user_safe_sop_menus(test_client: TestClient) -> None:
+    """新建普通角色应获得业务菜单，但不能获得管理员专属操作。"""
     _ = test_client
     async with async_db_session() as db, db.begin():
         sop_ids = await reconcile_sop_menus(db)
@@ -87,5 +103,58 @@ async def test_new_role_receives_all_sop_menus(test_client: TestClient) -> None:
         granted = set(
             (await db.scalars(select(RoleMenusModel.menu_id).where(RoleMenusModel.role_id == role.id))).all()
         )
-        assert sop_ids <= granted
+        assert sop_ids[False] <= granted
+        assert granted.isdisjoint(sop_ids[True])
+        await db.rollback()
+
+
+async def test_reconcile_removes_role_links_from_retired_menu_descendants(
+    test_client: TestClient,
+) -> None:
+    """退役旧菜单树时，后代不能继续向普通用户泄漏幽灵权限。"""
+    _ = test_client
+    async with async_db_session() as db, db.begin():
+        root = MenuModel(
+            name="旧 AI 根",
+            type=1,
+            order=999,
+            route_name="Ai",
+            route_path="/legacy-ai",
+        )
+        role = RoleModel(
+            name="旧 AI 权限回归角色",
+            code="LEGACY_AI_PERMISSION_TEST",
+            order=997,
+            status=0,
+            data_scope=1,
+        )
+        db.add_all([root, role])
+        await db.flush()
+        child = MenuModel(
+            name="旧 AI 会话",
+            type=2,
+            order=1,
+            permission="module_ai:chat:query",
+            route_name="LegacyAiChatForTest",
+            route_path="chat",
+            parent_id=root.id,
+        )
+        db.add(child)
+        await db.flush()
+        db.add(RoleMenusModel(role_id=role.id, menu_id=child.id))
+        await db.flush()
+
+        await reconcile_sop_menus(db)
+
+        await db.refresh(child)
+        link_count = await db.scalar(
+            select(func.count())
+            .select_from(RoleMenusModel)
+            .where(
+                RoleMenusModel.role_id == role.id,
+                RoleMenusModel.menu_id == child.id,
+            )
+        )
+        assert child.is_deleted is True
+        assert link_count == 0
         await db.rollback()

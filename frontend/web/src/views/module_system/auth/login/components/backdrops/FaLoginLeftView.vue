@@ -120,10 +120,10 @@ const siteTitle = computed(
   () => configStore.configData.sys_name?.config_value?.trim() || AppConfig.systemInfo.name
 );
 
-const DEFAULT_APP_VERSION = "3.0.0";
+/** 版本号：统一从 .env 的 VITE_VERSION 读取，后期维护只改环境变量即可 */
 const displayVersion = computed(() => {
-  const raw = configStore.configData.version?.config_value?.trim();
-  const ver = raw || DEFAULT_APP_VERSION;
+  const raw = String(import.meta.env.VITE_VERSION ?? "").trim();
+  const ver = raw || "1.0.0";
   return ver.startsWith("v") || ver.startsWith("V") ? ver : `v${ver}`;
 });
 </script>
@@ -211,7 +211,7 @@ $bg-mix-light-7: color-mix(in srgb, $primary-light-7 80%, $main-bg);
     position: absolute;
     inset: 0 0 10.5%;
     z-index: 10;
-    width: 40%;
+    width: 65%;
     margin: auto;
     animation: slideInLeft 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
   }

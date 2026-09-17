@@ -69,23 +69,6 @@
       </div>
 
       <div id="app-header-toolbar" class="flex items-center gap-2.5">
-        <!-- 搜索 -->
-        <div
-          v-if="shouldShowGlobalSearch && !isSopRoute"
-          class="search-bar-trigger flex items-center justify-between w-40 h-9 px-2.5 cursor-pointer border border-g-400 rounded-custom-sm max-md:hidden! transition duration-300 hover:-translate-y-0.5 hover:shadow-md"
-          @click="openSearchDialog"
-        >
-          <div class="flex items-center">
-            <FaSvgIcon icon="ri:search-line" class="text-sm text-g-500" />
-            <span class="ml-1 text-xs font-normal text-g-500">{{ $t("topBar.search.title") }}</span>
-          </div>
-          <div class="flex items-center h-5 px-1.5 text-g-500/80 border rounded">
-            <FaSvgIcon v-if="isWindows" icon="vaadin:ctrl-a" class="text-sm" />
-            <FaSvgIcon v-else icon="ri:command-fill" class="text-xs" />
-            <span class="ml-0.5 text-xs">k</span>
-          </div>
-        </div>
-
         <!-- 全屏按钮 -->
         <FaIconButton
           v-if="shouldShowFullscreen"
@@ -243,7 +226,6 @@ const {
   shouldShowRefreshButton,
   shouldShowFastEnter,
   shouldShowBreadcrumb,
-  shouldShowGlobalSearch,
   shouldShowFullscreen,
   shouldShowNotification,
   shouldShowLanguage,
@@ -348,13 +330,6 @@ const openSetting = (): void => {
   if (showSettingGuide.value) {
     settingStore.hideSettingGuide();
   }
-};
-
-/**
- * 打开全局搜索对话框
- */
-const openSearchDialog = (): void => {
-  mittBus.emit("openSearchDialog");
 };
 
 /**

@@ -61,16 +61,10 @@ export const SopDataAPI = {
   },
 
   syncWarehouse() {
-    return request<ApiResponse<{ message: string; details: Record<string, any> }>>({
+    return request<ApiResponse<Record<string, any>>>({
       url: `${API_PATH}/warehouse/sync`,
       method: "post",
-    });
-  },
-
-  getMarketHotspots() {
-    return request<ApiResponse<any[]>>({
-      url: `${API_PATH}/market/hotspots`,
-      method: "get",
+      timeout: 600_000,
     });
   },
 };

@@ -1,6 +1,3 @@
-from langchain.agents import create_agent
-from langchain.chat_models import init_chat_model
-
 from app.modules.sop.config import (
     AGENT_RECURSION_LIMIT,
     ARK_API_KEY,
@@ -9,8 +6,10 @@ from app.modules.sop.config import (
     MAIN_MODEL_THINKING,
     MODEL,
 )
+from langchain.agents import create_agent
+from langchain.chat_models import init_chat_model
 
-SOP_SYSTEM_PROMPT = """你是“SOP智能分析平台”的企业决策助手。
+SOP_SYSTEM_PROMPT = """你是由rudy开发的智能助手。
 
 你的职责是帮助业务人员查询单 SPU 的历史出库、激活、预测校验、数据质量和来源，并基于已经计算完成的事实生成清晰中文解释。你也可以通过知识库回答制度、口径、会议纪要和历史决策问题。
 

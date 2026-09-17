@@ -54,25 +54,37 @@ export const useConfigStore = defineStore(
       if (configLoading.value) {
         return;
       }
-      // force=true 时也需防短期内重复请求
-      if (!force && isConfigLoaded.value) {
-        return;
-      }
       if (force && Date.now() - _lastFetchedAt < MIN_FETCH_INTERVAL_MS) {
         return;
       }
+
+      // 已加载且数据非空时，先轻量对比版本号，版本变更自动失效缓存
+      let preFetchedList: ConfigTable[] | undefined;
+      if (!force && isConfigLoaded.value && Object.keys(configData.value).length > 0) {
+        try {
+          const resp = await ParamsAPI.getInitConfig();
+          const list = resp?.data?.data;
+          if (!Array.isArray(list)) return;
+          const remoteVer = list.find((i) => i.config_key === "version")?.config_value;
+          const localVer = configData.value["version"]?.config_value;
+          if (!remoteVer || remoteVer === localVer) return;
+          // 版本不同，走强制刷新
+          preFetchedList = list;
+          force = true;
+        } catch {
+          return;
+        }
+      }
+
       configLoading.value = true;
       try {
-        // 强制刷新时先清空
         if (force) {
           configData.value = {};
         }
 
-        // 获取系统级配置（演示模式、IP黑白名单等）
-        const response = await ParamsAPI.getInitConfig();
-        const list = response?.data?.data;
+        const list = preFetchedList ?? (await ParamsAPI.getInitConfig())?.data?.data;
         if (!Array.isArray(list)) {
-          console.warn("[configStore] getInitConfig: 响应 data 非数组", response?.data);
+          console.warn("[configStore] getInitConfig: 响应 data 非数组");
           return;
         }
         applyConfigList(list);
@@ -102,9 +114,9 @@ export const useConfigStore = defineStore(
   },
   {
     persist: {
-      key: "config",
+      key: "config-v2",
       storage: localStorage,
-      pick: ["configData", "isConfigLoaded"],
+      pick: ["isConfigLoaded"],
     },
   }
 );

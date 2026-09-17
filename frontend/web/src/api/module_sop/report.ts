@@ -14,9 +14,19 @@ export interface SopReportQuery {
   as_of_date?: string;
   region?: string;
   channel?: string;
+  start_month?: string;
+  end_month?: string;
 }
 
 export const SopReportAPI = {
+  refreshData() {
+    return request<ApiResponse<Record<string, any>>>({
+      url: `${API_PATH}/refresh`,
+      method: "post",
+      timeout: 600_000,
+    });
+  },
+
   getDimensionOptions(spuCode: string) {
     return request<ApiResponse<SopDimensionOptions>>({
       url: `${API_PATH}/spus/${spuCode}/dimensions`,

@@ -122,8 +122,6 @@
       </div>
     </ElForm>
 
-    <FaLoginThirdPartySection @oauth="$emit('oauth', $event)" />
-
     <FaLoginAuthLinkRow
       :hint="$t('login.noAccount')"
       :link-text="$t('login.register')"
@@ -167,7 +165,6 @@ interface Emits {
   openQr: [];
   forget: [];
   register: [];
-  oauth: [provider: "wechat" | "qq" | "github" | "gitee"];
 }
 
 const emit = defineEmits<Emits>();

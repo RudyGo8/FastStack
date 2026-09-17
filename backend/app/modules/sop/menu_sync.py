@@ -6,12 +6,13 @@
 - USER (id=3): 业务页面 + AI 问答 + 数据中心业务数据（只读）
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.system.menu.model import MenuModel
 from app.modules.system.role.model import RoleMenusModel, RoleModel
-from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 # 角色代码常量（对应 sys_role.code）
 ROLE_SUPER_ADMIN = "SUPER_ADMIN"
@@ -95,7 +96,7 @@ SOP_ANALYSIS_GROUP = SopMenuDefinition(
             route_name="SopForecastValidation",
             route_path="forecast-validation",
             component_path="module_sop/analysis/index",
-            icon="ri:analytics-line",
+            icon="ri:bar-chart-2-line",
             description="预测校验",
         ),
         SopMenuDefinition(
@@ -149,7 +150,7 @@ DATA_CENTER_GROUP = SopMenuDefinition(
     key="data-center",
     name="数据中心",
     type=1,
-    order=2,
+    order=3,
     route_name="DataCenter",
     route_path="/data-center",
     icon="ri:database-2-line",
@@ -164,7 +165,7 @@ DATA_CENTER_GROUP = SopMenuDefinition(
             permission="module_sop:data:query",
             route_name="BusinessData",
             route_path="business-data",
-            component_path="module_sop/data_center/index",
+            component_path="module_sop/data_center/business_data/index",
             icon="ri:line-chart-line",
             description="业务数据（只读）",
         ),
@@ -176,7 +177,7 @@ DATA_CENTER_GROUP = SopMenuDefinition(
             permission="module_sop:data:import",
             route_name="DataQuality",
             route_path="data-quality",
-            component_path="module_sop/data_center/index",
+            component_path="module_sop/data_center/data_quality/index",
             icon="ri:shield-check-line",
             description="数据质量",
             admin_only=True,
@@ -189,7 +190,7 @@ DATA_CENTER_GROUP = SopMenuDefinition(
             permission="module_sop:data:import",
             route_name="DataImport",
             route_path="data-import",
-            component_path="module_sop/data_center/index",
+            component_path="module_sop/data_center/data_import/index",
             icon="ri:upload-2-line",
             description="数据导入",
             admin_only=True,
@@ -202,9 +203,22 @@ DATA_CENTER_GROUP = SopMenuDefinition(
             permission="module_sop:data:sync",
             route_name="DataSource",
             route_path="data-source",
-            component_path="module_sop/data_center/index",
+            component_path="module_sop/data_center/data_source/index",
             icon="ri:server-line",
             description="数据源配置",
+            admin_only=True,
+        ),
+        SopMenuDefinition(
+            key="data-snapshot",
+            name="数据快照",
+            type=2,
+            order=5,
+            permission="module_sop:report:query",
+            route_name="DataSnapshot",
+            route_path="data-snapshot",
+            component_path="module_sop/data_center/snapshot/index",
+            icon="ri:camera-lens-line",
+            description="会前数据快照管理",
             admin_only=True,
         ),
     ),
@@ -217,7 +231,7 @@ AI_ASSISTANT_GROUP = SopMenuDefinition(
     key="ai-assistant",
     name="AI 助手",
     type=1,
-    order=3,
+    order=2,
     route_name="AiAssistant",
     route_path="/ai-assistant",
     icon="ri:robot-line",
@@ -229,18 +243,23 @@ AI_ASSISTANT_GROUP = SopMenuDefinition(
             name="智能问答",
             type=2,
             order=1,
+            permission="module_sop:chat:query",
             route_name="AiChat",
             route_path="chat",
             component_path="module_ai/chat/index",
             icon="ri:chat-smile-3-line",
             description="AI 对话与 SOP 知识问答",
+            children=(
+                _button("chat-stream", "流式对话", 1, "module_sop:chat:stream", "SSE 流式问答"),
+                _button("chat-delete", "删除会话", 2, "module_sop:chat:delete", "删除会话记录"),
+            ),
         ),
         SopMenuDefinition(
             key="ai-memory",
             name="会话记录",
             type=2,
             order=2,
-            permission="module_ai:chat:query",
+            permission="module_sop:chat:query",
             route_name="AiMemory",
             route_path="memory",
             component_path="module_ai/memory/index",
@@ -414,9 +433,29 @@ async def grant_menus_by_role(
     if not any(menu_ids_by_admin_only.values()):
         return
 
-    roles = await db.scalars(select(RoleModel).where(RoleModel.is_deleted.is_(False)))
-    all_menu_ids = menu_ids_by_admin_only.get(True, set()) | menu_ids_by_admin_only.get(
-        False, set()
+    roles = list(
+        await db.scalars(select(RoleModel).where(RoleModel.is_deleted.is_(False)))
+    )
+
+    # 基础菜单对全部角色可见：
+    # - 脚手架首页（AppHome），否则普通用户登录后首页无权限
+    # - 首页渲染所需的监控统计按钮权限（module_monitor:dashboard:query，只读）
+    base_ids = set(
+        (
+            await db.scalars(
+                select(MenuModel.id).where(
+                    MenuModel.is_deleted.is_(False),
+                    (MenuModel.route_name == "AppHome")
+                    | (MenuModel.permission == "module_monitor:dashboard:query"),
+                )
+            )
+        ).all()
+    )
+
+    all_menu_ids = (
+        menu_ids_by_admin_only.get(True, set())
+        | menu_ids_by_admin_only.get(False, set())
+        | base_ids
     )
     existing = set(
         (
@@ -434,10 +473,22 @@ async def grant_menus_by_role(
         if code in ADMIN_ROLE_CODES:
             target_ids = all_menu_ids
         else:
-            target_ids = menu_ids_by_admin_only.get(False, set())
+            target_ids = menu_ids_by_admin_only.get(False, set()) | base_ids
         for menu_id in target_ids:
             if (role.id, menu_id) not in existing:
                 inserts.append(RoleMenusModel(role_id=role.id, menu_id=menu_id))
+
+    # 回收非管理员角色上残留的管理员专属菜单绑定
+    admin_only_ids = menu_ids_by_admin_only.get(True, set())
+    if admin_only_ids:
+        non_admin_role_ids = [r.id for r in roles if (r.code or "") not in ADMIN_ROLE_CODES]
+        if non_admin_role_ids:
+            await db.execute(
+                delete(RoleMenusModel).where(
+                    RoleMenusModel.role_id.in_(non_admin_role_ids),
+                    RoleMenusModel.menu_id.in_(admin_only_ids),
+                )
+            )
 
     if inserts:
         db.add_all(inserts)
@@ -450,7 +501,6 @@ async def _prune_children(db: AsyncSession, parent_id: int, keep_ids: set[int]) 
         await db.scalars(
             select(MenuModel).where(
                 MenuModel.parent_id == parent_id,
-                MenuModel.is_deleted.is_(False),
             )
         )
     ).all()
@@ -468,18 +518,19 @@ async def _prune_children(db: AsyncSession, parent_id: int, keep_ids: set[int]) 
 async def _retire_roots(db: AsyncSession, route_names: tuple[str, ...]) -> None:
     """软删除重组前遗留的旧分组根及其角色绑定。"""
     for route_name in route_names:
-        menu = await db.scalar(
-            select(MenuModel).where(
-                MenuModel.route_name == route_name,
-                MenuModel.is_deleted.is_(False),
+        menus = (
+            await db.scalars(
+                select(MenuModel).where(
+                    MenuModel.route_name == route_name,
+                )
             )
-        )
-        if menu is None:
-            continue
-        menu.is_deleted = True
-        await db.execute(
-            delete(RoleMenusModel).where(RoleMenusModel.menu_id == menu.id)
-        )
+        ).all()
+        for menu in menus:
+            await _prune_children(db, menu.id, set())
+            menu.is_deleted = True
+            await db.execute(
+                delete(RoleMenusModel).where(RoleMenusModel.menu_id == menu.id)
+            )
     await db.flush()
 
 
@@ -595,6 +646,26 @@ async def get_sop_menu_ids(db: AsyncSession) -> set[int]:
     await collect(SOP_MENU_TREE, None)
     await collect(AI_MENU_TREE, None)
     return ids
+
+
+async def get_managed_menu_ids_by_admin_only(
+    db: AsyncSession,
+) -> dict[bool, set[int]]:
+    """返回声明管理的 SOP/AI 菜单，并按管理员专属标记分组。"""
+    result: dict[bool, set[int]] = {True: set(), False: set()}
+
+    async def collect(
+        definitions: tuple[SopMenuDefinition, ...], parent_id: int | None
+    ) -> None:
+        for definition in definitions:
+            menu = await _find_menu(db, definition, parent_id)
+            if menu is not None:
+                result[definition.admin_only].add(menu.id)
+                await collect(definition.children, menu.id)
+
+    await collect(SOP_MENU_TREE, None)
+    await collect(AI_MENU_TREE, None)
+    return result
 
 
 async def grant_all_menus_by_role(

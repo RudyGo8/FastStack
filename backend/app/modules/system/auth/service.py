@@ -145,7 +145,7 @@ class LoginService:
                 if role and role.status == 0:
                     if hasattr(role, "menus"):
                         for menu in role.menus:
-                            if menu and menu.status == 0:
+                            if menu and menu.status == 0 and not menu.is_deleted:
                                 menu_ids.append(menu.id)
                                 if menu.permission:
                                     permissions.append(menu.permission)

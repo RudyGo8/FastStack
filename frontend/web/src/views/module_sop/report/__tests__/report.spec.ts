@@ -4,32 +4,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import Report from "../index.vue";
 
-const { getSpuList, getDimensionOptions, getFirstPhaseReport, getSnapshotList, generateSnapshots } =
-  vi.hoisted(() => ({
-    getSpuList: vi.fn(),
-    getDimensionOptions: vi.fn(),
-    getFirstPhaseReport: vi.fn(),
-    getSnapshotList: vi.fn(),
-    generateSnapshots: vi.fn(),
-  }));
+const mockRoute = vi.hoisted(() => ({ query: {} }));
+vi.mock("vue-router", async () => {
+  const actual = await vi.importActual<any>("vue-router");
+  return {
+    ...actual,
+    useRoute: () => mockRoute,
+  };
+});
+
+const { getSpuList, getDimensionOptions, getFirstPhaseReport } = vi.hoisted(() => ({
+  getSpuList: vi.fn(),
+  getDimensionOptions: vi.fn(),
+  getFirstPhaseReport: vi.fn(),
+}));
 
 vi.mock("@/api/module_sop/data", () => ({ SopDataAPI: { getSpuList } }));
 vi.mock("@/api/module_sop/report", () => ({
-  SopReportAPI: { getDimensionOptions, getFirstPhaseReport, getSnapshotList, generateSnapshots },
+  SopReportAPI: { getDimensionOptions, getFirstPhaseReport },
 }));
 vi.mock("@utils", () => ({ Auth: { getAccessToken: vi.fn(() => "token") } }));
-
-const MOCK_SNAPSHOTS = [
-  {
-    id: 1,
-    spu_code: "C706",
-    as_of_date: "2026-09-30",
-    report_version: "r1",
-    completeness_status: "partial",
-    generated_at: "2026-10-01T00:00:00Z",
-    record_count: 42,
-  },
-];
 
 const MOCK_REPORT = {
   report_version: "r1",
@@ -61,11 +55,10 @@ const global = {
 describe("S&OP report page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRoute.query = {};
     getSpuList.mockResolvedValue({ data: { data: { items: [MOCK_REPORT.spu], total: 1 } } });
     getDimensionOptions.mockResolvedValue({ data: { data: { regions: [], channels: [] } } });
     getFirstPhaseReport.mockResolvedValue({ data: { data: MOCK_REPORT } });
-    getSnapshotList.mockResolvedValue({ data: { data: MOCK_SNAPSHOTS } });
-    generateSnapshots.mockResolvedValue({ data: { data: { generated_count: 1 } } });
   });
 
   it("renders the report as a centered document below its toolbar", async () => {
@@ -75,33 +68,53 @@ describe("S&OP report page", () => {
     expect(wrapper.find(".sop-report-toolbar").exists()).toBe(true);
     expect(wrapper.find(".sop-report-paper").exists()).toBe(true);
     expect(wrapper.text()).toContain("C706 S&OP 需求走势与分渠道提报预测报告");
-    expect(wrapper.text()).toContain("统计口径与规则");
+    expect(wrapper.text()).toContain("实际出库（按单据日期）");
   });
 
-  it("shows metrics, decision summary, and snapshot history in the document", async () => {
+  it("shows metrics, decision summary in the document", async () => {
     const wrapper = mount(Report, { global });
     await flushPromises();
 
     expect(wrapper.text()).toContain("核心指标");
     expect(wrapper.text()).toContain("决策摘要");
-    expect(wrapper.text()).toContain("S&OP 需求走势");
+    expect(wrapper.text()).toContain("历史出库/激活与未来6个月提报预测");
     expect(wrapper.text()).toContain("部分渠道数据缺失");
-    expect(wrapper.text()).toContain("快照历史");
   });
 
-  it("loads the first SPU and supports snapshot generation", async () => {
+  it("no longer renders snapshot history or generate button", async () => {
     const wrapper = mount(Report, { global });
     await flushPromises();
 
-    const generateButton = wrapper
-      .findAll("button")
-      .find((button) => button.text().includes("生成快照"));
-    expect(generateButton).toBeDefined();
-    await generateButton!.trigger("click");
-    await flushPromises();
+    expect(wrapper.text()).not.toContain("快照历史");
+    expect(wrapper.text()).not.toContain("生成快照");
+  });
 
-    expect(generateSnapshots).toHaveBeenCalled();
-    expect(getSnapshotList).toHaveBeenCalledTimes(2);
-    expect(getFirstPhaseReport).toHaveBeenCalledWith("C706", { region: "" });
+  it("passes region and channel when preset from route query", async () => {
+    mockRoute.query = {
+      spu: "C706",
+      region: "国内",
+      channel: "国内电商",
+      start: "2026-04",
+      end: "2026-09",
+    };
+    getFirstPhaseReport.mockResolvedValue({ data: { data: { ...MOCK_REPORT } } });
+    const wrapper = mount(Report, { global });
+    await flushPromises();
+    expect(getFirstPhaseReport).toHaveBeenCalledWith("C706", {
+      region: "国内",
+      channel: "国内电商",
+      start_month: "2026-04",
+      end_month: "2026-09",
+    });
+    expect(wrapper.text()).toContain("区域: 国内");
+    expect(wrapper.text()).toContain("渠道: 国内电商");
+    expect(wrapper.text()).toContain("2026-04");
+    mockRoute.query = {};
+  });
+
+  it("no longer renders the removed Excel export button", async () => {
+    const wrapper = mount(Report, { global });
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("导出 Excel");
   });
 });

@@ -2,6 +2,7 @@
 .sop-page {
   --sop-bg: #f4f6fa;
   --sop-surface: #ffffff;
+  --sop-subtle: #f8fafc;
   --sop-border: #e6ebf2;
   --sop-divider: #eef2f6;
   --sop-title: #141b2d;
@@ -265,12 +266,6 @@
       height: 56px;
       line-height: 56px;
     }
-    .header p {
-      top: -5px;
-      color: #141b2d !important;
-      font-size: 14px;
-      font-weight: 700;
-    }
     .el-sub-menu__title,
     .el-menu-item {
       border-radius: 9px;
@@ -325,5 +320,28 @@
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+  }
+}
+
+/* ─── 暗黑模式 ─── */
+html.dark .sop-page {
+  --sop-bg: #0f1420;
+  --sop-surface: #161e2e;
+  --sop-subtle: #1c2536;
+  --sop-border: #293448;
+  --sop-divider: #222c3f;
+  --sop-title: #e7ecf5;
+  --sop-body: #c3cbd9;
+  --sop-muted: #8b95a7;
+  --sop-faint: #6e798c;
+  --sop-primary: #5b9dff;
+  --sop-primary-soft: #1d2b45;
+}
+html.dark .app-layout.is-sop-workspace {
+  #app-header::before {
+    background-color: rgba(22, 30, 46, 0.96);
+  }
+  #app-content .page-content {
+    background: #0f1420 !important;
   }
 }

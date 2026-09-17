@@ -5,9 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.base_schema import AuthSchema, BatchSetAvailable, PageResultSchema
 from app.core.exceptions import CustomException
+from app.modules.sop.menu_sync import (
+    ADMIN_ROLE_CODES,
+    get_managed_menu_ids_by_admin_only,
+)
 from app.modules.system.dept.crud import DeptCRUD
 from app.modules.system.menu.crud import MenuCRUD
-from app.modules.sop.menu_sync import get_sop_menu_ids
 from app.utils.common_util import search_to_dict
 from app.utils.excel_util import ExcelUtil
 
@@ -179,13 +182,36 @@ class RoleService:
     async def _set_role_menus(self, role_ids: list[int], menu_ids: list[int]) -> None:
         """替换角色菜单关联：service 校验存在性，CRUD 只负责持久化。"""
         roles = await self._load_roles(role_ids, preload=["menus"])
-        effective_menu_ids = set(menu_ids)
-        effective_menu_ids.update(await get_sop_menu_ids(self.db))
-        menus = [] if not effective_menu_ids else await MenuCRUD(self.auth, self.db).get_list(search={"id": ("in", sorted(effective_menu_ids))})
-        if effective_menu_ids and len(menus) != len(effective_menu_ids):
-            missing = sorted(effective_menu_ids - {m.id for m in menus})
+        managed_ids = await get_managed_menu_ids_by_admin_only(self.db)
+        user_menu_ids = managed_ids[False]
+        admin_menu_ids = managed_ids[True]
+        requested_menu_ids = set(menu_ids)
+
+        effective_by_role: dict[int, set[int]] = {}
+        for role in roles:
+            if (role.code or "") in ADMIN_ROLE_CODES:
+                effective_ids = requested_menu_ids | user_menu_ids | admin_menu_ids
+            else:
+                effective_ids = (requested_menu_ids - admin_menu_ids) | user_menu_ids
+            effective_by_role[role.id] = effective_ids
+
+        all_effective_ids = set().union(*effective_by_role.values())
+        menus = (
+            []
+            if not all_effective_ids
+            else await MenuCRUD(self.auth, self.db).get_list(
+                search={"id": ("in", sorted(all_effective_ids))}
+            )
+        )
+        if all_effective_ids and len(menus) != len(all_effective_ids):
+            missing = sorted(all_effective_ids - {m.id for m in menus})
             raise CustomException(msg=f"菜单不存在: {missing}")
-        await RoleCRUD(self.auth, self.db).set_role_menus_crud(role_objs=roles, menu_objs=menus)
+        menu_map = {menu.id: menu for menu in menus}
+        for role in roles:
+            role_menus = [menu_map[mid] for mid in effective_by_role[role.id]]
+            await RoleCRUD(self.auth, self.db).set_role_menus_crud(
+                role_objs=[role], menu_objs=role_menus
+            )
 
     async def _set_role_depts(self, role_ids: list[int], dept_ids: list[int]) -> None:
         """替换角色部门关联：service 校验存在性，CRUD 只负责持久化。"""

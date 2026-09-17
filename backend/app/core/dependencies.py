@@ -42,12 +42,16 @@ async def redis_getter(request: Request) -> Redis:
 
 
 async def get_current_user(
+    request: Request,
     db: AsyncSession = Depends(db_getter),
     redis: Redis = Depends(redis_getter),
     token: str = Depends(OAuth2Schema),
 ) -> AuthSchema:
     """获取当前用户"""
-    return await _authenticate(token, db, redis)
+    auth = await _authenticate(token, db, redis)
+    # 将用户信息写入 request.state，供操作日志等中间件使用
+    request.state.ctx = type("Ctx", (), {"user_username": auth.user.username})()
+    return auth
 
 
 WS_TOKEN_SUBPROTOCOL = "access_token"

@@ -21,8 +21,9 @@ logger = get_logger(__name__)
 
 
 class SopSnapshotService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, *, autocommit: bool = True):
         self.db = db
+        self.autocommit = autocommit
         self.sop_service = SopService(db)
 
     def create_spu_snapshot(
@@ -78,7 +79,10 @@ class SopSnapshotService:
             )
             self.db.add(snapshot_obj)
 
-        self.db.commit()
+        if self.autocommit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(snapshot_obj)
         return snapshot_obj
 

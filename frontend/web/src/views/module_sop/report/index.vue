@@ -1,19 +1,6 @@
 <template>
   <div class="fa-full-height sop-workspace sop-page sop-report-root">
     <section class="sop-report-toolbar">
-      <div class="report-brand">
-        <span class="report-file-mark"
-          ><el-icon><Document /></el-icon
-        ></span>
-        <div class="brand-info">
-          <div class="title-row">
-            <strong>青岛玛金智能科技 · S&OP 业务报表</strong>
-            <el-tag v-if="report" :type="readinessType" size="small">{{ readinessLabel }}</el-tag>
-          </div>
-          <span class="sub-desc">历史事实、趋势预测与渠道提报的统一评审视图</span>
-        </div>
-      </div>
-
       <div class="report-sub-tabs" aria-label="报告章节">
         <button
           :class="{ active: activeSection === 'overview' }"
@@ -22,54 +9,36 @@
           报告总览
         </button>
         <button :class="{ active: activeSection === 'trend' }" @click="activeSection = 'trend'">
-          报表1 · 需求走势
+          报表1 · 出库/激活与提报预测
         </button>
         <button :class="{ active: activeSection === 'channel' }" @click="activeSection = 'channel'">
-          报表2 · 分渠道预测
-          <b v-if="channelMatrix.diffList.length">{{ channelMatrix.diffList.length }}</b>
+          报表2 · 分渠道矩阵
         </button>
       </div>
 
       <div class="report-toolbar-actions">
-        <label
-          ><span>SPU</span
-          ><el-select
-            v-model="spuCode"
-            filterable
-            remote
-            :remote-method="searchSpus"
-            :loading="spuLoading"
-            placeholder="选择 SPU"
-            class="w-36"
-            @change="onSpuChange"
-          >
-            <el-option
-              v-for="s in spuOptions"
-              :key="s.spu_code"
-              :label="formatSpuLabel(s)"
-              :value="s.spu_code"
-            /> </el-select
-        ></label>
-        <label
-          ><span>区域</span
-          ><el-select
-            v-model="region"
-            placeholder="全部区域"
-            clearable
-            class="w-28"
-            @change="loadReport"
-          >
-            <el-option v-for="r in regions" :key="r" :label="r" :value="r" /> </el-select
-        ></label>
-        <el-button :loading="generating" @click="generateSnapshot">生成快照</el-button>
-        <el-button type="primary" :icon="Document" :loading="exporting" @click="exportDocx"
+        <el-button
+          type="primary"
+          :icon="Document"
+          :loading="exporting"
+          :disabled="loading || !report"
+          @click="exportDocx"
           >导出 Word</el-button
         >
-        <el-button type="success" :icon="Download" @click="exportTable">导出 Excel</el-button>
-        <el-button :icon="Printer" @click="printPage">打印 / PDF</el-button>
-        <el-button :icon="Refresh" :loading="loading" @click="loadAll">刷新</el-button>
+        <el-button
+          :icon="Printer"
+          :loading="exporting"
+          :disabled="loading || !report"
+          @click="exportPdf"
+          >导出 PDF</el-button
+        >
+        <el-button :icon="Refresh" :loading="loading" @click="refreshFromWarehouse">{{
+          refreshing ? "同步数仓中" : "刷新"
+        }}</el-button>
       </div>
     </section>
+
+    <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
 
     <article v-if="report" class="sop-report-paper">
       <header class="paper-header">
@@ -78,16 +47,13 @@
         ></span>
         <h1>{{ spuCode }} S&OP 需求走势与分渠道提报预测报告</h1>
         <p>
-          {{ selectedSpuLabel }} · {{ region || "全部区域" }} · 数据时点
-          {{ report.as_of_date || asOfDate }}
+          {{ selectedSpuLabel }}
+          <template v-if="region"> · 区域: {{ region }}</template>
+          <template v-if="channel"> · 渠道: {{ channel }}</template>
+          <template v-else> · 全部渠道</template>
+          · 周期 {{ dateRange[0] }} 至 {{ dateRange[1] }} · 数据时点
+          {{ report.as_of_date || asOfDate }} · 最后数据同步 {{ lastSyncTime }}
         </p>
-        <div class="paper-callout">
-          <el-icon><InfoFilled /></el-icon>
-          <span
-            ><strong>统计口径与规则：</strong>历史事实按月汇总；未来六个月同时展示 AI
-            基线与业务提报；预测偏差绝对值超过 5% 进入关注清单，超过 15% 标记重点偏离。</span
-          >
-        </div>
       </header>
 
       <section
@@ -98,24 +64,28 @@
         <h2 id="metrics-title" class="paper-section-label">核心指标</h2>
         <div class="paper-kpi-grid">
           <article>
-            <span>报告周期累计出库</span><strong>{{ fmtNum(metrics.totalOutbound) }} 台</strong
-            ><small>实际发货数据</small>
+            <span>管理中的 SPU</span>
+            <strong>{{ spuTotal || spuOptions.length || "—" }}</strong>
+            <small>来自当前主数据接口</small>
           </article>
           <article>
-            <span>报告周期累计激活</span><strong>{{ fmtNum(metrics.totalActivation) }} 台</strong
-            ><small>端侧实销数据</small>
+            <span>周期累计出库</span>
+            <strong>{{ fmtNum(kpi.totalOutbound) }} 台</strong>
+            <small>{{
+              kpi.actualMonths ? `覆盖 ${kpi.actualMonths} 个统计月` : "暂无出库记录"
+            }}</small>
           </article>
           <article>
-            <span>激活转化比率</span
-            ><strong>{{
-              metrics.activationRate != null ? `${(metrics.activationRate * 100).toFixed(1)}%` : "—"
-            }}</strong
-            ><small>由当前业务数据计算</small>
+            <span>周期累计激活</span>
+            <strong>{{ fmtNum(kpi.totalActivation) }} 台</strong>
+            <small>{{
+              kpi.actualMonths ? `同期激活/出库比 ${kpi.activationRate || "—"}` : "暂无激活记录"
+            }}</small>
           </article>
           <article>
-            <span>预测风险诊断</span
-            ><strong class="text-amber">{{ metrics.riskCount }} 项关注</strong
-            ><small>确定性规则引擎判定</small>
+            <span>未来6个月提报总量</span>
+            <strong class="text-purple">{{ fmtNum(kpi.totalSubmit) }} 台</strong>
+            <small>自 {{ currentMonthLabel }} 起</small>
           </article>
         </div>
       </section>
@@ -126,7 +96,7 @@
       >
         <div class="paper-section-title">
           <span>报表 1</span>
-          <h2>S&OP 需求走势：历史出库/激活与未来六个月 AI 预测、提报预测</h2>
+          <h2>历史出库/激活与未来6个月提报预测</h2>
         </div>
         <p>
           展示历史事实走势与未来预测的连续时间轴，数量单位为台；数据缺失保持为空，不以演示值补齐。
@@ -141,10 +111,13 @@
       >
         <div class="paper-section-title">
           <span>报表 2</span>
-          <h2>分渠道提报预测对比（未来六个月）</h2>
+          <h2>分渠道销售、激活与提报预测</h2>
         </div>
-        <p>黄色单元格表示提报预测与 AI 基线偏差绝对值超过 5%，悬停可查看归因信息。</p>
-        <ChannelForecastMatrix :matrix="channelMatrix" />
+        <p>
+          实际周期 {{ dateRange?.[0] || "—" }} 至 {{ dateRange?.[1] || "—" }} ·
+          实际出库与激活按所选周期展示；提报预测为数据时点所在月起六个月。
+        </p>
+        <AnnualChannelMatrix :matrix="annualChannelMatrix" />
       </section>
 
       <section v-show="activeSection === 'overview'" class="paper-section">
@@ -172,27 +145,6 @@
           </p>
         </div>
       </section>
-
-      <section v-show="activeSection === 'overview'" class="paper-section paper-snapshots">
-        <div class="paper-section-title">
-          <span>归档</span>
-          <h2>快照历史</h2>
-        </div>
-        <el-table :data="snapshots" border size="small" empty-text="尚未生成会议快照">
-          <el-table-column prop="spu_code" label="SPU" width="110" />
-          <el-table-column prop="as_of_date" label="数据时点" width="120" />
-          <el-table-column prop="report_version" label="报告版本" width="130" />
-          <el-table-column label="就绪状态" width="150">
-            <template #default="{ row }"
-              ><el-tag :type="snapshotStatus(row.completeness_status).type" size="small">{{
-                snapshotStatus(row.completeness_status).label
-              }}</el-tag></template
-            >
-          </el-table-column>
-          <el-table-column prop="record_count" label="记录数" width="90" align="right" />
-          <el-table-column prop="generated_at" label="生成时间" min-width="180" />
-        </el-table>
-      </section>
     </article>
 
     <section v-else-if="!loading" class="sop-panel report-empty">
@@ -202,148 +154,177 @@
 </template>
 
 <script setup lang="ts">
-import {
-  Document,
-  Download,
-  InfoFilled,
-  Printer,
-  Refresh,
-  WarningFilled,
-} from "@element-plus/icons-vue";
-import { computed, onMounted, ref } from "vue";
-import * as XLSX from "xlsx";
+import { Document, InfoFilled, Printer, Refresh, WarningFilled } from "@element-plus/icons-vue";
+import { computed, onActivated, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
+import html2pdf from "html2pdf.js";
 
 import { SopDataAPI } from "@/api/module_sop/data";
 import { SopReportAPI } from "@/api/module_sop/report";
-import type {
-  SopFirstPhaseReport,
-  SopReportSnapshotSummary,
-  SopSpuInfo,
-} from "@/api/module_sop/types";
+import type { SopFirstPhaseReport, SopSpuInfo } from "@/api/module_sop/types";
 import { Auth } from "@utils";
 import { formatSpuLabel } from "../shared/presentation";
-import { buildChannelForecastMatrix, buildTrendChartDataset } from "../shared/report-data";
 import {
-  buildDecisionSummary,
-  buildReportMetrics,
-  getReportReadinessDisplay,
-} from "../shared/report-metrics";
-import ChannelForecastMatrix from "../shared/ChannelForecastMatrix.vue";
+  buildAnnualChannelMatrix,
+  buildTrendChartDataset,
+  submittedForecasts,
+  reportSyncTime,
+} from "../shared/report-data";
+import { buildDecisionSummary } from "../shared/report-metrics";
+import AnnualChannelMatrix from "../shared/AnnualChannelMatrix.vue";
 import SopTrendChart from "../shared/SopTrendChart.vue";
 import TrendDataTable from "../shared/TrendDataTable.vue";
 
 defineOptions({ name: "SopReport" });
 
+const route = useRoute();
+
+// 与工作台一致的默认周期：近 6 个自然月
+const fmtYM = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+const now = new Date();
+const defaultEnd = fmtYM(now);
+const defaultStart = fmtYM(new Date(now.getFullYear(), now.getMonth() - 5, 1));
+
 const activeSection = ref<"overview" | "trend" | "channel">("overview");
 const spuCode = ref("");
 const spuOptions = ref<SopSpuInfo[]>([]);
 const spuLoading = ref(false);
+const spuTotal = ref(0);
 const region = ref("");
-const regions = ref<string[]>([]);
-const period = ref(new Date().toISOString().slice(0, 7));
+const channel = ref("");
+const dateRange = ref<[string, string]>([defaultStart, defaultEnd]);
 const report = ref<SopFirstPhaseReport | null>(null);
-const snapshots = ref<SopReportSnapshotSummary[]>([]);
 const loading = ref(false);
-const generating = ref(false);
+const refreshing = ref(false);
+const loadError = ref("");
+let reportRequestId = 0;
+let dimensionsRequestId = 0;
+let searchRequestId = 0;
 const exporting = ref(false);
 
-const metrics = computed(() => buildReportMetrics(report.value));
-const decisionSummary = computed(() => buildDecisionSummary(report.value));
-const trendData = computed(() => buildTrendChartDataset(report.value));
-const channelMatrix = computed(() => buildChannelForecastMatrix(report.value));
-const readiness = computed(() =>
-  getReportReadinessDisplay(report.value?.completeness_status ?? "not_ready")
-);
-const readinessType = computed(() =>
-  readiness.value.type === "success"
-    ? "success"
-    : readiness.value.type === "warning"
-      ? "warning"
-      : "danger"
-);
-const readinessLabel = computed(() => readiness.value.label);
+const currentMonthLabel = computed(() => report.value?.as_of_date.slice(0, 7) || "—");
+const lastSyncTime = computed(() => reportSyncTime(report.value));
 const selectedSpuLabel = computed(() => {
   const selected = spuOptions.value.find((item) => item.spu_code === spuCode.value);
   return selected ? formatSpuLabel(selected) : spuCode.value || "—";
 });
-const asOfDate = computed(() => {
-  if (!period.value) return "—";
-  const [year = 0, month = 0] = period.value.split("-").map(Number);
-  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+const asOfDate = computed(() => dateRange.value?.[1] || "—");
+
+const trendData = computed(() => buildTrendChartDataset(report.value, dateRange.value));
+const annualChannelMatrix = computed(() => buildAnnualChannelMatrix(report.value, dateRange.value));
+const decisionSummary = computed(() => buildDecisionSummary(report.value));
+
+const kpi = computed(() => {
+  const [start = "", end = "9999-12"] = dateRange.value || ["", "9999-12"];
+  const filteredActuals = (report.value?.monthly_actuals || []).filter(
+    (m) => m.period >= start && m.period <= end
+  );
+  const totalOutbound = filteredActuals.reduce((s, m) => s + (Number(m.outbound_qty) || 0), 0);
+  const totalActivation = filteredActuals.reduce((s, m) => s + (Number(m.activation_qty) || 0), 0);
+  const totalSubmit = submittedForecasts(report.value).reduce(
+    (sum, item) => sum + Number(item.forecast_qty || 0),
+    0
+  );
+  return {
+    totalOutbound,
+    totalActivation,
+    totalSubmit,
+    activationRate:
+      totalOutbound > 0 ? `${((totalActivation / totalOutbound) * 100).toFixed(1)}%` : null,
+    actualMonths: filteredActuals.length,
+  };
 });
 
 function fmtNum(value: number | null): string {
   return value === null || value === undefined ? "—" : Number(value).toLocaleString("zh-CN");
 }
 
-function snapshotStatus(status: string) {
-  return getReportReadinessDisplay(status);
+async function loadSpuTotal() {
+  const response = await SopDataAPI.getSpuList({ limit: 1 });
+  spuTotal.value = response.data?.data?.total ?? 0;
 }
 
 async function searchSpus(query: string) {
-  if (!query) return;
+  const requestId = ++searchRequestId;
   spuLoading.value = true;
   try {
-    const response = await SopDataAPI.getSpuList({ search: query, limit: 20 });
+    const response = await SopDataAPI.getSpuList({ search: query.trim(), limit: 500 });
+    if (requestId !== searchRequestId) return;
     spuOptions.value = response.data?.data?.items ?? [];
-    const firstSpu = spuOptions.value[0];
+
+    const firstSpu =
+      spuOptions.value.find((item) => item.spu_code === "C416") ?? spuOptions.value[0];
     if (!spuCode.value && firstSpu) {
       spuCode.value = firstSpu.spu_code;
-      await Promise.all([loadDimensions(), loadReport(), loadSnapshots()]);
+      await Promise.all([loadDimensions(), loadReport()]);
     }
   } finally {
-    spuLoading.value = false;
+    if (requestId === searchRequestId) spuLoading.value = false;
   }
-}
-
-async function onSpuChange() {
-  region.value = "";
-  await Promise.all([loadDimensions(), loadReport(), loadSnapshots()]);
 }
 
 async function loadDimensions() {
   if (!spuCode.value) return;
-  const response = await SopReportAPI.getDimensionOptions(spuCode.value);
-  regions.value = response.data?.data?.regions ?? [];
+  const requestId = ++dimensionsRequestId;
+  const code = spuCode.value;
+  try {
+    const response = await SopReportAPI.getDimensionOptions(code);
+    if (requestId !== dimensionsRequestId || code !== spuCode.value) return;
+    void response;
+  } catch {
+    // Report loading exposes errors; dimension failures must not restore an older SPU's options.
+  }
 }
 
 async function loadReport() {
-  if (!spuCode.value) return;
-  loading.value = true;
-  try {
-    const response = await SopReportAPI.getFirstPhaseReport(spuCode.value, {
-      region: region.value,
-    });
-    report.value = response.data?.data ?? null;
-  } finally {
+  if (refreshing.value) return;
+  const requestId = ++reportRequestId;
+  report.value = null;
+  loadError.value = "";
+  if (!spuCode.value) {
     loading.value = false;
+    return;
+  }
+  loading.value = true;
+  const code = spuCode.value;
+  const params = {
+    region: region.value || "",
+    channel: channel.value || "",
+    ...(dateRange.value?.[0] ? { start_month: dateRange.value[0] } : {}),
+    ...(dateRange.value?.[1] ? { end_month: dateRange.value[1] } : {}),
+  };
+  try {
+    const response = await SopReportAPI.getFirstPhaseReport(code, params);
+    if (requestId === reportRequestId) report.value = response.data?.data ?? null;
+  } catch {
+    if (requestId === reportRequestId) loadError.value = "当前筛选的数据加载失败，请重试";
+  } finally {
+    if (requestId === reportRequestId) loading.value = false;
   }
 }
 
-async function loadSnapshots() {
-  const response = await SopReportAPI.getSnapshotList({
-    spu_code: spuCode.value || undefined,
-    limit: 20,
-  });
-  snapshots.value = response.data?.data ?? [];
+async function refreshFromWarehouse() {
+  if (refreshing.value) return;
+  refreshing.value = true;
+  ++reportRequestId;
+  report.value = null;
+  loadError.value = "";
+  loading.value = true;
+  try {
+    await SopReportAPI.refreshData();
+  } catch {
+    loadError.value = "数据刷新失败，请重试";
+    return;
+  } finally {
+    refreshing.value = false;
+    loading.value = false;
+  }
+  await loadAll();
 }
 
 async function loadAll() {
-  if (!spuCode.value) return searchSpus("C");
-  await Promise.all([loadDimensions(), loadReport(), loadSnapshots()]);
-}
-
-async function generateSnapshot() {
-  generating.value = true;
-  try {
-    await SopReportAPI.generateSnapshots({
-      spu_code: spuCode.value || undefined,
-      as_of_date: asOfDate.value,
-    });
-    await loadSnapshots();
-  } finally {
-    generating.value = false;
-  }
+  if (!spuCode.value) return searchSpus("");
+  await Promise.all([loadDimensions(), loadReport()]);
 }
 
 async function exportDocx() {
@@ -351,13 +332,16 @@ async function exportDocx() {
   exporting.value = true;
   try {
     const token = Auth.getAccessToken();
-    const base = import.meta.env.VITE_API_BASE_URL || "";
-    const response = await fetch(
-      `${base}/api/v1/sop/report/spus/${spuCode.value}/export-docx?as_of_date=${asOfDate.value}`,
-      {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      }
-    );
+    const params = new URLSearchParams({
+      as_of_date: report.value?.as_of_date || "",
+      start_month: dateRange.value[0],
+      end_month: dateRange.value[1],
+      ...(region.value ? { region: region.value } : {}),
+      ...(channel.value ? { channel: channel.value } : {}),
+    }).toString();
+    const response = await fetch(`/api/v1/sop/report/spus/${spuCode.value}/export-docx?${params}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!response.ok) throw new Error(`导出失败(${response.status})`);
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
@@ -371,28 +355,63 @@ async function exportDocx() {
   }
 }
 
-function exportTable() {
-  const rows = channelMatrix.value.diffList.map((item) => ({
-    渠道: item.channel,
-    月份: item.month,
-    AI预测数量: item.aiQty,
-    提报预测数量: item.submitQty,
-    差异数量: item.diffQty,
-    差异率: `${(item.deviationRatio * 100).toFixed(1)}%`,
-    校验维度: item.dimension,
-    差异原因: item.reason,
-  }));
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), "预测差异");
-  XLSX.writeFile(
-    workbook,
-    `SOP_产销协同业务报表_${spuCode.value || "未选择"}_${period.value}.xlsx`
-  );
+const exportPdf = async () => {
+  const el = document.querySelector(".sop-report-paper") as HTMLElement;
+  if (!el) return;
+  exporting.value = true;
+  try {
+    await html2pdf()
+      .set({
+        margin: [10, 10, 10, 10],
+        filename: `SOP_会议报告_${spuCode.value}_${asOfDate.value}.pdf`,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+      })
+      .from(el)
+      .save();
+  } finally {
+    exporting.value = false;
+  }
+};
+
+async function applyRouteQuery() {
+  const presetSpu = (route.query.spu as string)?.trim();
+  const presetRegion = (route.query.region as string)?.trim() || "";
+  const presetChannel = (route.query.channel as string)?.trim() || "";
+  const presetStart = (route.query.start as string)?.trim();
+  const presetEnd = (route.query.end as string)?.trim();
+
+  if (presetStart && presetEnd) {
+    dateRange.value = [presetStart, presetEnd];
+  }
+  if (presetSpu) {
+    spuCode.value = presetSpu;
+    region.value = presetRegion;
+    channel.value = presetChannel;
+    await searchSpus(presetSpu);
+    await Promise.all([loadDimensions(), loadReport()]);
+  }
 }
 
-const printPage = () => window.print();
+let activatedOnce = false;
+onActivated(() => {
+  if (activatedOnce && spuCode.value && !refreshing.value) loadAll();
+  activatedOnce = true;
+});
 
-onMounted(() => searchSpus("C"));
+onMounted(() => {
+  loadSpuTotal().catch(() => {});
+  const presetSpu = (route.query.spu as string)?.trim();
+  if (presetSpu) {
+    applyRouteQuery();
+  } else {
+    searchSpus("");
+  }
+});
+
+// 监听路由参数变化（从工作台跳转时组件可能已挂载，onMounted 不会重触）
+watch(() => route.query, applyRouteQuery);
 </script>
 
 <style scoped>
@@ -407,78 +426,32 @@ onMounted(() => searchSpus("C"));
   align-items: center;
   gap: 18px;
   padding: 10px 14px;
-  border: 1px solid #e6ebf2;
+  border: 1px solid var(--sop-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--sop-surface);
   box-shadow: 0 2px 8px rgba(20, 27, 45, 0.04);
-}
-.report-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 315px;
-}
-.report-file-mark,
-.paper-icon {
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  color: #2563eb;
-  background: #eff6ff;
-}
-.report-file-mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-}
-.brand-info {
-  min-width: 0;
-}
-.title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.title-row strong {
-  color: #141b2d;
-  font-size: 14px;
-  white-space: nowrap;
-}
-.sub-desc {
-  display: block;
-  margin-top: 2px;
-  color: #94a3b8;
-  font-size: 10.5px;
 }
 .report-sub-tabs {
   display: flex;
   gap: 3px;
   padding: 3px;
   border-radius: 6px;
-  background: #f1f5f9;
+  background: var(--sop-subtle);
 }
 .report-sub-tabs button {
   height: 28px;
   padding: 0 10px;
   border: 0;
   border-radius: 5px;
-  color: #64748b;
+  color: var(--sop-muted);
   background: transparent;
   font-size: 11.5px;
   white-space: nowrap;
 }
 .report-sub-tabs button.active {
   color: #2563eb;
-  background: #fff;
+  background: var(--sop-surface);
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
-}
-.report-sub-tabs b {
-  margin-left: 4px;
-  padding: 0 5px;
-  border-radius: 999px;
-  color: #fff;
-  background: #ea580c;
-  font-size: 9px;
 }
 .report-toolbar-actions {
   display: flex;
@@ -488,42 +461,39 @@ onMounted(() => searchSpus("C"));
   flex: 1;
   flex-wrap: wrap;
 }
-.report-toolbar-actions label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: #64748b;
-  font-size: 11.5px;
-}
 .sop-report-paper {
   width: min(1200px, calc(100% - 24px));
   margin: 16px auto 0;
   padding: 34px 46px 48px;
-  border: 1px solid #e6ebf2;
+  border: 1px solid var(--sop-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--sop-surface);
   box-shadow: 0 4px 18px rgba(20, 27, 45, 0.04);
 }
 .paper-header {
   text-align: center;
 }
 .paper-icon {
+  display: grid;
+  place-items: center;
   width: 44px;
   height: 44px;
   margin: 0 auto 10px;
   border-radius: 12px;
+  color: #2563eb;
+  background: #eff6ff;
   font-size: 20px;
 }
 .paper-header h1 {
   margin: 0;
-  color: #141b2d;
+  color: var(--sop-title);
   font-size: 24px;
   font-weight: 750;
   letter-spacing: -0.5px;
 }
 .paper-header > p {
   margin: 5px 0 0;
-  color: #64748b;
+  color: var(--sop-muted);
   font-size: 12px;
 }
 .paper-callout {
@@ -535,7 +505,7 @@ onMounted(() => searchSpus("C"));
   border-left: 4px solid #2563eb;
   border-radius: 0 6px 6px 0;
   color: #475569;
-  background: #f8fafc;
+  background: var(--sop-subtle);
   text-align: left;
   font-size: 12px;
   line-height: 1.65;
@@ -547,7 +517,7 @@ onMounted(() => searchSpus("C"));
 }
 .paper-section-label {
   margin: 0 0 8px;
-  color: #94a3b8;
+  color: var(--sop-faint);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -563,29 +533,29 @@ onMounted(() => searchSpus("C"));
 }
 .paper-kpi-grid article {
   padding: 13px 15px;
-  border: 1px solid #e6ebf2;
+  border: 1px solid var(--sop-border);
   border-radius: 8px;
-  background: #fafbfc;
+  background: var(--sop-subtle);
 }
 .paper-kpi-grid span,
 .paper-kpi-grid small {
   display: block;
-  color: #64748b;
+  color: var(--sop-muted);
   font-size: 11.5px;
 }
 .paper-kpi-grid strong {
   display: block;
   margin: 5px 0;
-  color: #141b2d;
+  color: var(--sop-title);
   font-size: 20px;
 }
-.paper-kpi-grid .text-amber {
-  color: #d97706;
+.paper-kpi-grid .text-purple {
+  color: #7c3aed;
 }
 .paper-section {
   margin-top: 32px;
   padding-top: 25px;
-  border-top: 1px dashed #e6ebf2;
+  border-top: 1px dashed var(--sop-border);
 }
 .paper-section-title {
   display: flex;
@@ -602,19 +572,19 @@ onMounted(() => searchSpus("C"));
 }
 .paper-section-title h2 {
   margin: 0;
-  color: #141b2d;
+  color: var(--sop-title);
   font-size: 16px;
 }
 .paper-section > p {
   margin: 5px 0 13px;
-  color: #64748b;
+  color: var(--sop-muted);
   font-size: 12px;
   line-height: 1.6;
 }
 .paper-chart-box {
   margin-bottom: 12px;
   padding: 10px;
-  border: 1px solid #e6ebf2;
+  border: 1px solid var(--sop-border);
   border-radius: 8px;
 }
 .paper-decision-grid {
@@ -625,7 +595,7 @@ onMounted(() => searchSpus("C"));
 .paper-decision-grid article {
   padding: 12px;
   border-radius: 7px;
-  background: #f8fafc;
+  background: var(--sop-subtle);
 }
 .paper-decision-grid strong {
   color: #1e293b;
@@ -649,8 +619,11 @@ onMounted(() => searchSpus("C"));
   border: 1px solid #fef3c7;
   border-radius: 6px;
   color: #92400e;
-  background: #fffbeb;
+  background: var(--sop-surface);
   font-size: 11.5px;
+}
+.paper-snapshots {
+  margin-top: 32px;
 }
 .report-empty {
   margin-top: 14px;
@@ -683,9 +656,6 @@ onMounted(() => searchSpus("C"));
   }
 }
 @media (max-width: 520px) {
-  .report-brand {
-    min-width: 0;
-  }
   .paper-kpi-grid,
   .paper-decision-grid {
     grid-template-columns: 1fr;
@@ -698,7 +668,7 @@ onMounted(() => searchSpus("C"));
   }
   .sop-report-root {
     padding: 0;
-    background: #fff;
+    background: var(--sop-surface);
   }
   .sop-report-paper {
     width: 100%;

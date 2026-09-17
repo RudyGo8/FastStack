@@ -89,13 +89,36 @@ class NoticeService:
         )
 
     async def available_page(self) -> PageResultSchema[NoticeOutSchema]:
-        """获取已启用的公告（首页展示用，最多 10 条）"""
-        return await NoticeCRUD(self.auth, self.db).page(
-            offset=0,
-            limit=10,
-            order_by=[{"id": "asc"}],
-            search={"status": ("eq", 0)},
-            out_schema=NoticeOutSchema,
+        """获取已启用的公告（首页展示用，最多 10 条）
+
+        注意：此接口跳过数据权限过滤，所有登录用户都能看到已启用的公告。
+        """
+        from sqlalchemy import select, func
+        from sqlalchemy.orm import selectinload
+        from app.modules.system.notice.model import NoticeModel
+
+        # 直接查询，跳过 CRUDBase 的权限过滤（查询已发布的公告）
+        conditions = [NoticeModel.is_deleted == False, NoticeModel.status == 1]
+        count_sql = select(func.count()).select_from(NoticeModel).where(*conditions)
+        total = (await self.db.execute(count_sql)).scalar() or 0
+
+        data_sql = (
+            select(NoticeModel)
+            .where(*conditions)
+            .options(selectinload(NoticeModel.created_by), selectinload(NoticeModel.updated_by))
+            .order_by(NoticeModel.id.asc())
+            .limit(10)
+        )
+        result = await self.db.execute(data_sql)
+        objs = result.scalars().all()
+
+        items = [NoticeOutSchema.model_validate(obj) for obj in objs]
+
+        return PageResultSchema(
+            page_no=1,
+            page_size=10,
+            total=total,
+            items=items,
         )
 
     async def create(self, data: NoticeCreateSchema) -> NoticeOutSchema:

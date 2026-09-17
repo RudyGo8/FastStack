@@ -45,6 +45,11 @@ export interface SopMonthlyActual {
   activation_qty: number;
 }
 
+export interface SopChannelMonthlyActual extends SopMonthlyActual {
+  region: string;
+  channel: string;
+}
+
 export interface SopForecastPoint {
   forecast_month: string;
   region: string;
@@ -107,6 +112,19 @@ export interface SopChannelMatrix {
   diffList: SopChannelDifference[];
 }
 
+export interface SopAnnualChannelRow {
+  channel: string;
+  outboundOrForecast: Array<number | null>;
+  activations: Array<number | null>;
+}
+
+export interface SopAnnualChannelMatrix {
+  year: number;
+  months: string[];
+  salesMonthCount: number;
+  rows: SopAnnualChannelRow[];
+}
+
 export interface SopProvenance {
   domain: string;
   source_system: string;
@@ -124,11 +142,13 @@ export interface SopFirstPhaseReport {
   report_version: string;
   spu: SopSpuInfo;
   as_of_date: string;
+  source_synced_at?: string | null;
   filters: { region: string; channel: string };
   completeness_status: "complete" | "partial" | "not_ready";
   missing_domains: string[];
   warnings: string[];
   monthly_actuals: SopMonthlyActual[];
+  channel_actuals: SopChannelMonthlyActual[];
   events: SopMonthlyEventInfo[];
   forecasts: SopForecastPoint[];
   forecast_checks: SopForecastCheck[];

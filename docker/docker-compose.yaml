@@ -9,7 +9,7 @@
 services:
   # ==================== 数据库服务 ====================
   mysql:
-    container_name: mysql
+    container_name: sopfast_mysql
     image: mysql:8.0
     restart: unless-stopped
     platform: linux/amd64
@@ -49,7 +49,7 @@ services:
 
   # ==================== Redis 服务 ====================
   redis:
-    container_name: redis
+    container_name: sopfast_redis
     image: redis:7-alpine
     restart: unless-stopped
     platform: linux/amd64
@@ -87,7 +87,7 @@ services:
 
   # ==================== 后端服务 ====================
   backend:
-    container_name: backend
+    container_name: sopfast_backend
     build:
       context: ../
       dockerfile: ./docker/backend/Dockerfile
@@ -160,7 +160,7 @@ services:
 
   # ==================== Nginx 服务 ====================
   nginx:
-    container_name: nginx
+    container_name: sopfast_nginx
     image: nginx:1.25-alpine
     restart: unless-stopped
     platform: linux/amd64

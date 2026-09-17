@@ -2,30 +2,18 @@ import ElementPlus from "element-plus";
 import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 
-import DataCenter from "../index.vue";
+import BusinessData from "../business_data/index.vue";
 
-const { getDataStatus, getSpuList, getSnapshotList } = vi.hoisted(() => ({
+const { getDataStatus, getSpuList } = vi.hoisted(() => ({
   getDataStatus: vi.fn(),
   getSpuList: vi.fn(),
-  getSnapshotList: vi.fn(),
 }));
 vi.mock("@/api/module_sop/data", () => ({
-  SopDataAPI: {
-    getDataStatus,
-    getSpuList,
-    importSpus: vi.fn(),
-    importSales: vi.fn(),
-    importActivations: vi.fn(),
-    importForecasts: vi.fn(),
-    syncWarehouse: vi.fn(),
-  },
-}));
-vi.mock("@/api/module_sop/report", () => ({
-  SopReportAPI: { getSnapshotList, generateSnapshots: vi.fn() },
+  SopDataAPI: { getDataStatus, getSpuList },
 }));
 
-describe("S&OP data center", () => {
-  it("provides source, import, SPU, rule, and snapshot workflows", async () => {
+describe("S&OP business data", () => {
+  it("provides ordinary users a read-only SPU and source overview", async () => {
     getDataStatus.mockResolvedValue({
       data: {
         data: {
@@ -61,31 +49,36 @@ describe("S&OP data center", () => {
         },
       },
     });
-    getSpuList.mockResolvedValue({ data: { data: { items: [], total: 0 } } });
-    getSnapshotList.mockResolvedValue({ data: { data: [] } });
-    const wrapper = mount(DataCenter, { global: { plugins: [ElementPlus] } });
+    getSpuList.mockResolvedValue({
+      data: {
+        data: {
+          items: [
+            {
+              spu_code: "C706",
+              spu_name: "AI眼镜",
+              product_line: "AR",
+              brand: "Test",
+              category: "消费",
+              lifecycle_stage: "growth",
+            },
+          ],
+          total: 1,
+        },
+      },
+    });
+    const wrapper = mount(BusinessData, { global: { plugins: [ElementPlus] } });
     await flushPromises();
     const text = wrapper.text();
-    expect(text).toContain("企业数仓连接正常");
-    expect(text).toContain("一期核心：1/1 已同步");
-    expect(text).toContain("扩展域待接入");
-    for (const label of ["数据源同步", "数据导入", "SPU 主数据", "校验规则", "会前数据快照"])
-      expect(text).toContain(label);
+    expect(text).toContain("业务数据（只读）");
+    expect(text).toContain("数据导入与配置请联系管理员");
+    expect(text).toContain("C706");
+    expect(text).toContain("AI眼镜");
     await wrapper
       .findAll(".el-tabs__item")
-      .find((item) => item.text().includes("SPU 主数据"))
+      .find((item) => item.text().includes("数据源状态"))
       ?.trigger("click");
-    expect(wrapper.text()).toContain("SPU 品类主数据字典");
-    await wrapper
-      .findAll(".el-tabs__item")
-      .find((item) => item.text().includes("校验规则"))
-      ?.trigger("click");
-    expect(wrapper.text()).toContain("预测校验默认口径");
-    await wrapper
-      .findAll(".el-tabs__item")
-      .find((item) => item.text().includes("会前数据快照"))
-      ?.trigger("click");
-    expect(wrapper.text()).toContain("T-1 业务基线");
-    expect(wrapper.text()).toContain("不可变快照历史记录");
+    await flushPromises();
+    expect(wrapper.text()).toContain("预测数据");
+    expect(wrapper.text()).toContain("同步完成");
   });
 });

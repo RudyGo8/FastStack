@@ -54,6 +54,14 @@ class SopMonthlyActual(BaseModel):
     activation_qty: float = 0
 
 
+class SopChannelMonthlyActual(BaseModel):
+    period: str
+    region: str
+    channel: str
+    outbound_qty: float = 0
+    activation_qty: float = 0
+
+
 class SopForecastPoint(BaseModel):
     forecast_month: date
     region: str
@@ -102,11 +110,13 @@ class SopFirstPhaseReportResponse(BaseModel):
     report_version: str = "sop-first-phase.v0.1"
     spu: SopSpuInfo
     as_of_date: date
+    source_synced_at: datetime | None = None
     filters: SopReportFilters = Field(default_factory=SopReportFilters)
     completeness_status: Literal["complete", "partial", "not_ready"]
     missing_domains: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     monthly_actuals: list[SopMonthlyActual] = Field(default_factory=list)
+    channel_actuals: list[SopChannelMonthlyActual] = Field(default_factory=list)
     events: list[SopMonthlyEventInfo] = Field(default_factory=list)
     forecasts: list[SopForecastPoint] = Field(default_factory=list)
     forecast_checks: list[SopForecastCheck] = Field(default_factory=list)

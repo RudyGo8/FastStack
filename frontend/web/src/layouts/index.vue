@@ -61,7 +61,7 @@ const settingStore = useSettingsStore();
 const userStore = useUserStore();
 const route = useRoute();
 const isSopWorkspace = computed(() =>
-  /^\/(sop-analysis(?:\/|$)|sop(?:\/|$)|data-center(?:\/|$)|ai\/(?:chat|knowledge)(?:\/|$))/.test(
+  /^\/(sop-analysis(?:\/|$)|sop(?:\/|$)|data-center(?:\/|$)|ai-assistant(?:\/|$)|ai\/(?:chat|knowledge)(?:\/|$))/.test(
     route.path,
   )
 );

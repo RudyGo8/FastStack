@@ -115,6 +115,93 @@ GROUP BY product_name, contry, DATE_FORMAT(IF(device_status_name = '激活', act
 """
 
 
+# 渠道取销售出库单关联的二级部门；出库业务日期取单据日期，激活取终端激活日期。
+# 覆盖数仓全部可用历史（不再限定 2026 起），保证工作台任意周期都是同一真实出库/激活口径。
+CHANNEL_ACTUALS_SYNC_SQL = """
+WITH channel_base AS (
+    SELECT DISTINCT
+        h.SN,
+        e.ID AS event_id,
+        a.name AS spu_code,
+        DATE(o.outstock_date) AS outbound_date,
+        DATE(h.active_at) AS activation_date,
+        h.passed,
+        dev.device_status,
+        CASE COALESCE(NULLIF(rel.department_two_name, ''), '未归属渠道')
+            WHEN '国内渠道销售部' THEN '国内渠道'
+            WHEN '国内电商销售部' THEN '国内电商'
+            WHEN '海外渠道销售一部' THEN '国际渠道销售一部'
+            WHEN '海外渠道销售二部' THEN '国际渠道销售二部'
+            WHEN '海外电商销售部' THEN '海外电商'
+            WHEN '跨境大客户部' THEN '跨境'
+            ELSE COALESCE(NULLIF(rel.department_two_name, ''), '未归属渠道')
+        END AS channel
+    FROM big_data_dw.dw_c_base_product_header AS h
+    JOIN big_data_dw.dw_c_base_product_events AS e
+        ON h.SN = e.SN AND e.events_name = '销售出库'
+    JOIN big_data_dw.dw_c_base_material AS m
+        ON e.material_id_1 = m.material_id
+    JOIN big_data_dw.dw_c_base_auxiliary_information AS a
+        ON m.material_spu = a.id
+    LEFT JOIN big_data_dw.dw_c_sal_outstock AS o
+        ON SUBSTRING_INDEX(e.ID, '单', -1) = o.outstock_number
+    LEFT JOIN big_data_dw.dw_c_base_department AS d
+        ON o.outstock_dept_id = d.department_id
+    LEFT JOIN big_data_dw.dw_c_base_department_relation_new AS rel
+        ON d.department_relation_id_new = rel.id
+    LEFT JOIN big_data_dw.dw_a_device AS dev
+        ON h.SN = dev.device_sn
+    WHERE a.name IN (
+          SELECT DISTINCT spu
+          FROM dwd_sales_forecast_import
+          WHERE spu IS NOT NULL AND spu != ''
+      )
+      AND h.SN NOT LIKE 'FBA%' AND h.SN NOT LIKE 'FBL%' AND h.SN NOT LIKE 'FBS%'
+      AND h.SN NOT LIKE 'jstbx%' AND h.SN NOT LIKE '优选仓%' AND h.SN NOT LIKE 'XND%'
+      AND h.SN NOT LIKE '官方仓%' AND h.SN NOT LIKE '云仓发%' AND h.SN NOT LIKE '转FB%'
+      AND h.SN NOT LIKE '速卖通%' AND h.SN NOT LIKE 'XNS%' AND h.SN NOT LIKE 'XNP%'
+      AND h.SN NOT LIKE 'XNC%' AND h.SN NOT LIKE 'SMT%' AND h.SN NOT LIKE 'YMX%'
+      AND h.SN NOT LIKE '海外仓%' AND h.SN NOT LIKE 'jst%' AND h.SN NOT LIKE 'XNSN%'
+      AND h.SN NOT LIKE 'T%'
+),
+activation_base AS (
+    SELECT
+        channel_base.*,
+        ROW_NUMBER() OVER (
+            PARTITION BY SN
+            ORDER BY
+                (outbound_date <= activation_date) DESC,
+                CASE WHEN outbound_date <= activation_date THEN outbound_date END DESC,
+                CASE WHEN outbound_date > activation_date THEN outbound_date END ASC,
+                event_id DESC
+        ) AS activation_rank
+    FROM channel_base
+    WHERE device_status = 7
+      AND passed IS NOT NULL
+)
+SELECT
+    'outbound' AS metric,
+    spu_code,
+    outbound_date AS business_date,
+    channel,
+    COUNT(DISTINCT SN) AS quantity
+FROM channel_base
+WHERE passed IS NOT NULL AND outbound_date IS NOT NULL
+GROUP BY spu_code, outbound_date, channel
+UNION ALL
+SELECT
+    'activation' AS metric,
+    spu_code,
+    activation_date AS business_date,
+    channel,
+    COUNT(DISTINCT SN) AS quantity
+FROM activation_base
+WHERE activation_rank = 1
+GROUP BY spu_code, activation_date, channel
+ORDER BY spu_code, business_date, channel, metric
+"""
+
+
 # 2. 历史销售与出库标准查询 SQL (来自 sop数据清单.xlsx 第 2 项: 良发提供的 dw_a_sal_order_* 表)
 HISTORICAL_SALES_SQL = """
 SELECT
@@ -137,33 +224,6 @@ WHERE mapping.spu_code = :spu_code
   AND sales.FDate < DATE_ADD(:end_date, INTERVAL 1 DAY)
 GROUP BY mapping.spu_code, DATE(sales.FDate)
 ORDER BY business_date ASC
-"""
-
-
-HISTORICAL_SALES_SYNC_SQL = """
-SELECT
-    mapping.spu_code,
-    DATE(sales.FDate) AS business_date,
-    SUM(sales.FQty) AS outbound_qty
-FROM dw_c_sal_predict_jst_order AS sales
-JOIN (
-    SELECT
-        product_code,
-        MIN(forecast_model_spu) AS spu_code
-    FROM import_sales_forecast_spu_model
-    WHERE product_code IS NOT NULL AND product_code != ''
-    GROUP BY product_code
-    HAVING COUNT(DISTINCT forecast_model_spu) = 1
-) AS mapping ON sales.Material_number = mapping.product_code
-JOIN (
-    SELECT DISTINCT spu
-    FROM dwd_sales_forecast_import
-    WHERE spu IS NOT NULL AND spu != ''
-) AS active_spus ON active_spus.spu = mapping.spu_code
-WHERE sales.Status IN ('Sent', 'Delivering')
-  AND sales.FDate IS NOT NULL
-GROUP BY mapping.spu_code, DATE(sales.FDate)
-ORDER BY mapping.spu_code, business_date
 """
 
 

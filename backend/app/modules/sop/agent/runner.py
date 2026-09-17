@@ -77,8 +77,9 @@ async def chat_with_agent_stream(user_text: str, user_id: str = "default_user", 
     reset_tool_call_guards()
     reset_mcp_trace()
     # 从mysql数据库和redis加载该用户的历史消息
-    messages = storage.load(user_id, session_id)
-    messages = prepare_messages(messages)
+    full_history = storage.load(user_id, session_id)
+    # 截断仅用于本次 LLM 上下文；持久化始终基于完整历史，避免覆盖丢消息
+    messages = prepare_messages(full_history)
 
     is_sop_query = _is_sop_query(user_text)
     candidate_tools = await tool_gateway.get_tools(
@@ -110,6 +111,17 @@ async def chat_with_agent_stream(user_text: str, user_id: str = "default_user", 
 
     full_response = ""
     stream_usage = None
+
+    def _persist_history(rag_trace: dict | None) -> None:
+        """把完整历史 + 本轮问答落库；AI 内容为空（异常/全被拦截）时只落用户消息。"""
+        persisted = [*full_history, HumanMessage(content=user_text)]
+        if full_response:
+            persisted.append(AIMessage(content=full_response))
+        extra = [None] * (len(persisted) - 1) + [{"rag_trace": rag_trace or {}}]
+        try:
+            storage.save(user_id, session_id, persisted, extra_message_data=extra)
+        except Exception:
+            logger.exception("persist_chat_history_failed user_id=%s session_id=%s", user_id, session_id)
 
     async def _agent_worker():
         nonlocal full_response, stream_usage
@@ -168,13 +180,14 @@ async def chat_with_agent_stream(user_text: str, user_id: str = "default_user", 
                 break
             yield f"data: {json.dumps(event)}\n\n"
 
-    # 断开连接情况
+    # 断开连接情况（刷新页面/切换会话/中止流式）：已生成的部分也要落库，避免整轮对话丢失
     except GeneratorExit:
         agent_task.cancel()
         try:
             await agent_task
         except asyncio.CancelledError:
             pass
+        _persist_history(_backfill_trace({}, called_tools=trace_state["called_tools"], mcp_tool_names=mcp_tool_names, rag_step_count=trace_state["rag_step_count"]))
         raise
     finally:
         # 清除rag步骤队列
@@ -208,8 +221,5 @@ async def chat_with_agent_stream(user_text: str, user_id: str = "default_user", 
     # 标准 SSE 结束标记：前端通过监听[DONE]来判断流式响应
     yield "data: [DONE]\n\n"
 
-    # 消息列表：历史会话+本轮用户问题+本轮AI回答
-    persisted_messages = [*messages, HumanMessage(content=user_text), AIMessage(content=full_response)]
-    # 最后一条AI回答附带trace
-    extra_message_data = [None] * (len(persisted_messages) - 1) + [{"rag_trace": rag_trace}]
-    storage.save(user_id, session_id, persisted_messages, extra_message_data=extra_message_data)
+    # 消息列表：完整历史+本轮用户问题+本轮AI回答
+    _persist_history(rag_trace)

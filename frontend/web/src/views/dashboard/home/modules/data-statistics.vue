@@ -2,8 +2,9 @@
   <ElRow :gutter="20">
     <ElCol v-for="item in cards" :key="item.key" :xs="24" :sm="12" :lg="6" class="mb-5">
       <div
-        class="fa-card h-36 px-6 py-5 cursor-pointer transition-shadow hover:shadow-md"
-        @click="go(item.to)"
+        class="fa-card h-36 px-6 py-5 transition-shadow"
+        :class="{ 'cursor-pointer hover:shadow-md': item.clickable }"
+        @click="item.clickable ? go(item.to) : undefined"
       >
         <div class="flex h-full items-start justify-between">
           <div class="flex flex-col justify-between h-full">
@@ -53,6 +54,7 @@ const cards = computed(() => [
     iconBg: "bg-danger/10",
     iconColor: "text-danger",
     to: "/system/notice",
+    clickable: false,
   },
   {
     key: "notice_total",
@@ -63,6 +65,7 @@ const cards = computed(() => [
     iconBg: "bg-warning/10",
     iconColor: "text-warning",
     to: "/system/notice",
+    clickable: false,
   },
   {
     key: "today_logins",
@@ -73,6 +76,7 @@ const cards = computed(() => [
     iconBg: "bg-theme/10",
     iconColor: "text-theme",
     to: "/system/log",
+    clickable: false,
   },
   {
     key: "today_operations",
@@ -83,6 +87,7 @@ const cards = computed(() => [
     iconBg: "bg-success/10",
     iconColor: "text-success",
     to: "/system/log",
+    clickable: false,
   },
 ]);
 

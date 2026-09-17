@@ -1,21 +1,14 @@
-from langchain_core.messages import SystemMessage
+"""会话上下文准备：滑动窗口截断，控制发给 LLM 的历史长度。
 
-from app.modules.sop.agent.factory import get_model
+说明：
+- 问答场景通常只需要最近几轮上下文，直接截断比 LLM 总结更快（总结需先阻塞调用一次模型）。
+- 窗口外的历史仍完整保存在会话存储中，前端随时可回看，仅不参与下次推理。
+"""
 
-
-# 上下文压缩机制，自动将早期对话总结成简短摘要
-def summarize_old_messages(model, messages: list) -> str:
-    old_conversation = "\n".join([f"{'用户' if msg.type == 'human' else 'AI'}: {msg.content}" for msg in messages])
-
-    summary_prompt = f"请总结以下对话关键信息（用户偏好、重要事实、待办事项）。\n\n{old_conversation}\n\n请输出简洁摘要。"
-
-    summary = model.invoke(summary_prompt).content
-    return summary
+MAX_HISTORY_MESSAGES = 10  # 保留最近 10 条（约 5 轮对话）
 
 
 def prepare_messages(messages: list) -> list:
-    if len(messages) <= 50:
+    if len(messages) <= MAX_HISTORY_MESSAGES:
         return messages
-    # 取前 40 条消息进行总结
-    summary = summarize_old_messages(get_model(), messages[:40])
-    return [SystemMessage(content=f"之前的对话摘要：\n{summary}")] + messages[40:]
+    return messages[-MAX_HISTORY_MESSAGES:]

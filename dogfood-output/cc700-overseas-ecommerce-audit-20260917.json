@@ -1,0 +1,1035 @@
+{
+  "checked_at": "2026-09-17T10:43:41.948912",
+  "spu": "CC700",
+  "channel": "海外电商",
+  "period_start": "2026-04-01",
+  "period_end": "2026-09-17",
+  "report": {
+    "report_version": "sop-first-phase.v0.1",
+    "spu": {
+      "spu_code": "CC700",
+      "spu_name": "CC700",
+      "product_line": "码表",
+      "brand": "Magene",
+      "category": "室外",
+      "lifecycle_stage": "新品"
+    },
+    "as_of_date": "2026-09-17",
+    "source_synced_at": "2026-09-17T09:45:41",
+    "filters": {
+      "region": "",
+      "channel": "海外电商"
+    },
+    "completeness_status": "complete",
+    "missing_domains": [],
+    "warnings": [],
+    "monthly_actuals": [
+      {
+        "period": "2026-04",
+        "outbound_qty": 273.0,
+        "activation_qty": 90.0
+      },
+      {
+        "period": "2026-05",
+        "outbound_qty": 86.0,
+        "activation_qty": 97.0
+      },
+      {
+        "period": "2026-06",
+        "outbound_qty": 180.0,
+        "activation_qty": 130.0
+      },
+      {
+        "period": "2026-07",
+        "outbound_qty": 469.0,
+        "activation_qty": 272.0
+      },
+      {
+        "period": "2026-08",
+        "outbound_qty": 434.0,
+        "activation_qty": 321.0
+      },
+      {
+        "period": "2026-09",
+        "outbound_qty": 68.0,
+        "activation_qty": 173.0
+      }
+    ],
+    "channel_actuals": [
+      {
+        "period": "2026-04",
+        "region": "全球",
+        "channel": "海外电商",
+        "outbound_qty": 273.0,
+        "activation_qty": 90.0
+      },
+      {
+        "period": "2026-05",
+        "region": "全球",
+        "channel": "海外电商",
+        "outbound_qty": 86.0,
+        "activation_qty": 97.0
+      },
+      {
+        "period": "2026-06",
+        "region": "全球",
+        "channel": "海外电商",
+        "outbound_qty": 180.0,
+        "activation_qty": 130.0
+      },
+      {
+        "period": "2026-07",
+        "region": "全球",
+        "channel": "海外电商",
+        "outbound_qty": 469.0,
+        "activation_qty": 272.0
+      },
+      {
+        "period": "2026-08",
+        "region": "全球",
+        "channel": "海外电商",
+        "outbound_qty": 434.0,
+        "activation_qty": 321.0
+      },
+      {
+        "period": "2026-09",
+        "region": "全球",
+        "channel": "海外电商",
+        "outbound_qty": 68.0,
+        "activation_qty": 173.0
+      }
+    ],
+    "events": [],
+    "forecasts": [
+      {
+        "forecast_month": "2026-07-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_type": "sales_reported",
+        "forecast_qty": 4600.0,
+        "version": "2026_OFFICIAL",
+        "source_table": "dwd_sales_forecast_import",
+        "snapshot_at": "2026-09-17T09:45:41"
+      },
+      {
+        "forecast_month": "2026-08-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_type": "sales_reported",
+        "forecast_qty": 4200.0,
+        "version": "2026_OFFICIAL",
+        "source_table": "dwd_sales_forecast_import",
+        "snapshot_at": "2026-09-17T09:45:41"
+      },
+      {
+        "forecast_month": "2026-09-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_type": "sales_reported",
+        "forecast_qty": 5020.0,
+        "version": "2026_OFFICIAL",
+        "source_table": "dwd_sales_forecast_import",
+        "snapshot_at": "2026-09-17T09:45:41"
+      },
+      {
+        "forecast_month": "2026-10-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_type": "sales_reported",
+        "forecast_qty": 4940.0,
+        "version": "2026_OFFICIAL",
+        "source_table": "dwd_sales_forecast_import",
+        "snapshot_at": "2026-09-17T09:45:41"
+      },
+      {
+        "forecast_month": "2026-11-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_type": "sales_reported",
+        "forecast_qty": 3900.0,
+        "version": "2026_OFFICIAL",
+        "source_table": "dwd_sales_forecast_import",
+        "snapshot_at": "2026-09-17T09:45:41"
+      },
+      {
+        "forecast_month": "2026-12-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_type": "sales_reported",
+        "forecast_qty": 2950.0,
+        "version": "2026_OFFICIAL",
+        "source_table": "dwd_sales_forecast_import",
+        "snapshot_at": "2026-09-17T09:45:41"
+      },
+      {
+        "forecast_month": "2027-01-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_type": "sales_reported",
+        "forecast_qty": 1200.0,
+        "version": "2026_OFFICIAL",
+        "source_table": "dwd_sales_forecast_import",
+        "snapshot_at": "2026-09-17T09:45:41"
+      },
+      {
+        "forecast_month": "2027-02-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_type": "sales_reported",
+        "forecast_qty": 1250.0,
+        "version": "2026_OFFICIAL",
+        "source_table": "dwd_sales_forecast_import",
+        "snapshot_at": "2026-09-17T09:45:41"
+      },
+      {
+        "forecast_month": "2027-03-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_type": "sales_reported",
+        "forecast_qty": 1500.0,
+        "version": "2026_OFFICIAL",
+        "source_table": "dwd_sales_forecast_import",
+        "snapshot_at": "2026-09-17T09:45:41"
+      },
+      {
+        "forecast_month": "2027-04-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_type": "sales_reported",
+        "forecast_qty": 1600.0,
+        "version": "2026_OFFICIAL",
+        "source_table": "dwd_sales_forecast_import",
+        "snapshot_at": "2026-09-17T09:45:41"
+      },
+      {
+        "forecast_month": "2027-05-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_type": "sales_reported",
+        "forecast_qty": 1750.0,
+        "version": "2026_OFFICIAL",
+        "source_table": "dwd_sales_forecast_import",
+        "snapshot_at": "2026-09-17T09:45:41"
+      },
+      {
+        "forecast_month": "2027-06-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_type": "sales_reported",
+        "forecast_qty": 2000.0,
+        "version": "2026_OFFICIAL",
+        "source_table": "dwd_sales_forecast_import",
+        "snapshot_at": "2026-09-17T09:45:41"
+      },
+      {
+        "forecast_month": "2027-07-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_type": "sales_reported",
+        "forecast_qty": 1800.0,
+        "version": "2026_OFFICIAL",
+        "source_table": "dwd_sales_forecast_import",
+        "snapshot_at": "2026-09-17T09:45:41"
+      },
+      {
+        "forecast_month": "2027-08-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_type": "sales_reported",
+        "forecast_qty": 1600.0,
+        "version": "2026_OFFICIAL",
+        "source_table": "dwd_sales_forecast_import",
+        "snapshot_at": "2026-09-17T09:45:41"
+      }
+    ],
+    "forecast_checks": [
+      {
+        "forecast_month": "2026-07-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_qty": 4600.0,
+        "evaluable": true,
+        "score": 45,
+        "level": "high",
+        "rule_version": "forecast-check.v0.1-draft",
+        "baseline_qty": 180.5,
+        "deviation_ratio": 24.484765,
+        "findings": [
+          {
+            "code": "FORECAST_DEVIATION_HIGH",
+            "severity": "high",
+            "message": "预测相对近月基线偏离 2448.5%。"
+          },
+          {
+            "code": "TREND_CONFLICT",
+            "severity": "medium",
+            "message": "预测变化方向与近三个月实际趋势相反，需要补充原因。"
+          }
+        ]
+      },
+      {
+        "forecast_month": "2026-08-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_qty": 4200.0,
+        "evaluable": true,
+        "score": 45,
+        "level": "high",
+        "rule_version": "forecast-check.v0.1-draft",
+        "baseline_qty": 180.5,
+        "deviation_ratio": 22.268698,
+        "findings": [
+          {
+            "code": "FORECAST_DEVIATION_HIGH",
+            "severity": "high",
+            "message": "预测相对近月基线偏离 2226.9%。"
+          },
+          {
+            "code": "TREND_CONFLICT",
+            "severity": "medium",
+            "message": "预测变化方向与近三个月实际趋势相反，需要补充原因。"
+          }
+        ]
+      },
+      {
+        "forecast_month": "2026-09-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_qty": 5020.0,
+        "evaluable": true,
+        "score": 45,
+        "level": "high",
+        "rule_version": "forecast-check.v0.1-draft",
+        "baseline_qty": 180.5,
+        "deviation_ratio": 26.811634,
+        "findings": [
+          {
+            "code": "FORECAST_DEVIATION_HIGH",
+            "severity": "high",
+            "message": "预测相对近月基线偏离 2681.2%。"
+          },
+          {
+            "code": "TREND_CONFLICT",
+            "severity": "medium",
+            "message": "预测变化方向与近三个月实际趋势相反，需要补充原因。"
+          }
+        ]
+      },
+      {
+        "forecast_month": "2026-10-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_qty": 4940.0,
+        "evaluable": true,
+        "score": 45,
+        "level": "high",
+        "rule_version": "forecast-check.v0.1-draft",
+        "baseline_qty": 180.5,
+        "deviation_ratio": 26.368421,
+        "findings": [
+          {
+            "code": "FORECAST_DEVIATION_HIGH",
+            "severity": "high",
+            "message": "预测相对近月基线偏离 2636.8%。"
+          },
+          {
+            "code": "TREND_CONFLICT",
+            "severity": "medium",
+            "message": "预测变化方向与近三个月实际趋势相反，需要补充原因。"
+          }
+        ]
+      },
+      {
+        "forecast_month": "2026-11-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_qty": 3900.0,
+        "evaluable": true,
+        "score": 45,
+        "level": "high",
+        "rule_version": "forecast-check.v0.1-draft",
+        "baseline_qty": 180.5,
+        "deviation_ratio": 20.606648,
+        "findings": [
+          {
+            "code": "FORECAST_DEVIATION_HIGH",
+            "severity": "high",
+            "message": "预测相对近月基线偏离 2060.7%。"
+          },
+          {
+            "code": "TREND_CONFLICT",
+            "severity": "medium",
+            "message": "预测变化方向与近三个月实际趋势相反，需要补充原因。"
+          }
+        ]
+      },
+      {
+        "forecast_month": "2026-12-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_qty": 2950.0,
+        "evaluable": true,
+        "score": 45,
+        "level": "high",
+        "rule_version": "forecast-check.v0.1-draft",
+        "baseline_qty": 180.5,
+        "deviation_ratio": 15.34349,
+        "findings": [
+          {
+            "code": "FORECAST_DEVIATION_HIGH",
+            "severity": "high",
+            "message": "预测相对近月基线偏离 1534.3%。"
+          },
+          {
+            "code": "TREND_CONFLICT",
+            "severity": "medium",
+            "message": "预测变化方向与近三个月实际趋势相反，需要补充原因。"
+          }
+        ]
+      },
+      {
+        "forecast_month": "2027-01-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_qty": 1200.0,
+        "evaluable": true,
+        "score": 45,
+        "level": "high",
+        "rule_version": "forecast-check.v0.1-draft",
+        "baseline_qty": 180.5,
+        "deviation_ratio": 5.648199,
+        "findings": [
+          {
+            "code": "FORECAST_DEVIATION_HIGH",
+            "severity": "high",
+            "message": "预测相对近月基线偏离 564.8%。"
+          },
+          {
+            "code": "TREND_CONFLICT",
+            "severity": "medium",
+            "message": "预测变化方向与近三个月实际趋势相反，需要补充原因。"
+          }
+        ]
+      },
+      {
+        "forecast_month": "2027-02-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_qty": 1250.0,
+        "evaluable": true,
+        "score": 45,
+        "level": "high",
+        "rule_version": "forecast-check.v0.1-draft",
+        "baseline_qty": 180.5,
+        "deviation_ratio": 5.925208,
+        "findings": [
+          {
+            "code": "FORECAST_DEVIATION_HIGH",
+            "severity": "high",
+            "message": "预测相对近月基线偏离 592.5%。"
+          },
+          {
+            "code": "TREND_CONFLICT",
+            "severity": "medium",
+            "message": "预测变化方向与近三个月实际趋势相反，需要补充原因。"
+          }
+        ]
+      },
+      {
+        "forecast_month": "2027-03-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_qty": 1500.0,
+        "evaluable": true,
+        "score": 45,
+        "level": "high",
+        "rule_version": "forecast-check.v0.1-draft",
+        "baseline_qty": 180.5,
+        "deviation_ratio": 7.310249,
+        "findings": [
+          {
+            "code": "FORECAST_DEVIATION_HIGH",
+            "severity": "high",
+            "message": "预测相对近月基线偏离 731.0%。"
+          },
+          {
+            "code": "TREND_CONFLICT",
+            "severity": "medium",
+            "message": "预测变化方向与近三个月实际趋势相反，需要补充原因。"
+          }
+        ]
+      },
+      {
+        "forecast_month": "2027-04-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_qty": 1600.0,
+        "evaluable": true,
+        "score": 45,
+        "level": "high",
+        "rule_version": "forecast-check.v0.1-draft",
+        "baseline_qty": 180.5,
+        "deviation_ratio": 7.864266,
+        "findings": [
+          {
+            "code": "FORECAST_DEVIATION_HIGH",
+            "severity": "high",
+            "message": "预测相对近月基线偏离 786.4%。"
+          },
+          {
+            "code": "TREND_CONFLICT",
+            "severity": "medium",
+            "message": "预测变化方向与近三个月实际趋势相反，需要补充原因。"
+          }
+        ]
+      },
+      {
+        "forecast_month": "2027-05-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_qty": 1750.0,
+        "evaluable": true,
+        "score": 45,
+        "level": "high",
+        "rule_version": "forecast-check.v0.1-draft",
+        "baseline_qty": 180.5,
+        "deviation_ratio": 8.695291,
+        "findings": [
+          {
+            "code": "FORECAST_DEVIATION_HIGH",
+            "severity": "high",
+            "message": "预测相对近月基线偏离 869.5%。"
+          },
+          {
+            "code": "TREND_CONFLICT",
+            "severity": "medium",
+            "message": "预测变化方向与近三个月实际趋势相反，需要补充原因。"
+          }
+        ]
+      },
+      {
+        "forecast_month": "2027-06-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_qty": 2000.0,
+        "evaluable": true,
+        "score": 45,
+        "level": "high",
+        "rule_version": "forecast-check.v0.1-draft",
+        "baseline_qty": 180.5,
+        "deviation_ratio": 10.080332,
+        "findings": [
+          {
+            "code": "FORECAST_DEVIATION_HIGH",
+            "severity": "high",
+            "message": "预测相对近月基线偏离 1008.0%。"
+          },
+          {
+            "code": "TREND_CONFLICT",
+            "severity": "medium",
+            "message": "预测变化方向与近三个月实际趋势相反，需要补充原因。"
+          }
+        ]
+      },
+      {
+        "forecast_month": "2027-07-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_qty": 1800.0,
+        "evaluable": true,
+        "score": 45,
+        "level": "high",
+        "rule_version": "forecast-check.v0.1-draft",
+        "baseline_qty": 180.5,
+        "deviation_ratio": 8.972299,
+        "findings": [
+          {
+            "code": "FORECAST_DEVIATION_HIGH",
+            "severity": "high",
+            "message": "预测相对近月基线偏离 897.2%。"
+          },
+          {
+            "code": "TREND_CONFLICT",
+            "severity": "medium",
+            "message": "预测变化方向与近三个月实际趋势相反，需要补充原因。"
+          }
+        ]
+      },
+      {
+        "forecast_month": "2027-08-01",
+        "region": "全球",
+        "channel": "海外电商",
+        "forecast_qty": 1600.0,
+        "evaluable": true,
+        "score": 45,
+        "level": "high",
+        "rule_version": "forecast-check.v0.1-draft",
+        "baseline_qty": 180.5,
+        "deviation_ratio": 7.864266,
+        "findings": [
+          {
+            "code": "FORECAST_DEVIATION_HIGH",
+            "severity": "high",
+            "message": "预测相对近月基线偏离 786.4%。"
+          },
+          {
+            "code": "TREND_CONFLICT",
+            "severity": "medium",
+            "message": "预测变化方向与近三个月实际趋势相反，需要补充原因。"
+          }
+        ]
+      }
+    ],
+    "provenance": [
+      {
+        "domain": "activation",
+        "source_system": "BIG_DATA_DW",
+        "source_table": "dw_a_device",
+        "batch_id": "sync_20260917_094541_025315",
+        "snapshot_at": "2026-09-17T09:45:41"
+      },
+      {
+        "domain": "forecast",
+        "source_system": "BIG_DATA_DW",
+        "source_table": "dwd_sales_forecast_import",
+        "batch_id": "sync_20260917_094541_025315",
+        "snapshot_at": "2026-09-17T09:45:41"
+      },
+      {
+        "domain": "historical_sales",
+        "source_system": "BIG_DATA_DW",
+        "source_table": "dw_c_base_product_events+dw_c_sal_outstock",
+        "batch_id": "sync_20260917_094541_025315",
+        "snapshot_at": "2026-09-17T09:45:41"
+      }
+    ]
+  },
+  "live_actuals": [
+    {
+      "metric": "activation",
+      "period": "2026-04",
+      "quantity": 90
+    },
+    {
+      "metric": "activation",
+      "period": "2026-05",
+      "quantity": 97
+    },
+    {
+      "metric": "activation",
+      "period": "2026-06",
+      "quantity": 130
+    },
+    {
+      "metric": "activation",
+      "period": "2026-07",
+      "quantity": 272
+    },
+    {
+      "metric": "activation",
+      "period": "2026-08",
+      "quantity": 321
+    },
+    {
+      "metric": "activation",
+      "period": "2026-09",
+      "quantity": 173
+    },
+    {
+      "metric": "outbound",
+      "period": "2026-04",
+      "quantity": 273
+    },
+    {
+      "metric": "outbound",
+      "period": "2026-05",
+      "quantity": 86
+    },
+    {
+      "metric": "outbound",
+      "period": "2026-06",
+      "quantity": 180
+    },
+    {
+      "metric": "outbound",
+      "period": "2026-07",
+      "quantity": 469
+    },
+    {
+      "metric": "outbound",
+      "period": "2026-08",
+      "quantity": 434
+    },
+    {
+      "metric": "outbound",
+      "period": "2026-09",
+      "quantity": 68
+    }
+  ],
+  "live_forecasts": [
+    {
+      "channel": "海外电商",
+      "forecast_month": "26.07",
+      "quantity": "4600.0000",
+      "source_rows": 1
+    },
+    {
+      "channel": "海外电商",
+      "forecast_month": "26.08",
+      "quantity": "4200.0000",
+      "source_rows": 1
+    },
+    {
+      "channel": "海外电商",
+      "forecast_month": "26.09",
+      "quantity": "5020.0000",
+      "source_rows": 1
+    },
+    {
+      "channel": "海外电商",
+      "forecast_month": "26.10",
+      "quantity": "4940.0000",
+      "source_rows": 1
+    },
+    {
+      "channel": "海外电商",
+      "forecast_month": "26.11",
+      "quantity": "3900.0000",
+      "source_rows": 1
+    },
+    {
+      "channel": "海外电商",
+      "forecast_month": "26.12",
+      "quantity": "2950.0000",
+      "source_rows": 1
+    },
+    {
+      "channel": "海外电商",
+      "forecast_month": "27.01",
+      "quantity": "1200.0000",
+      "source_rows": 1
+    },
+    {
+      "channel": "海外电商",
+      "forecast_month": "27.02",
+      "quantity": "1250.0000",
+      "source_rows": 1
+    },
+    {
+      "channel": "海外电商",
+      "forecast_month": "27.03",
+      "quantity": "1500.0000",
+      "source_rows": 1
+    },
+    {
+      "channel": "海外电商",
+      "forecast_month": "27.04",
+      "quantity": "1600.0000",
+      "source_rows": 1
+    },
+    {
+      "channel": "海外电商",
+      "forecast_month": "27.05",
+      "quantity": "1750.0000",
+      "source_rows": 1
+    },
+    {
+      "channel": "海外电商",
+      "forecast_month": "27.06",
+      "quantity": "2000.0000",
+      "source_rows": 1
+    },
+    {
+      "channel": "海外电商",
+      "forecast_month": "27.07",
+      "quantity": "1800.0000",
+      "source_rows": 1
+    },
+    {
+      "channel": "海外电商",
+      "forecast_month": "27.08",
+      "quantity": "1600.0000",
+      "source_rows": 1
+    }
+  ],
+  "source_scope_check": [
+    {
+      "record_group": "included",
+      "period": "2026-04",
+      "quantity": 273
+    },
+    {
+      "record_group": "included",
+      "period": "2026-05",
+      "quantity": 86
+    },
+    {
+      "record_group": "included",
+      "period": "2026-06",
+      "quantity": 180
+    },
+    {
+      "record_group": "included",
+      "period": "2026-07",
+      "quantity": 469
+    },
+    {
+      "record_group": "included",
+      "period": "2026-08",
+      "quantity": 434
+    },
+    {
+      "record_group": "included",
+      "period": "2026-09",
+      "quantity": 68
+    },
+    {
+      "record_group": "no_passed_value",
+      "period": "2026-04",
+      "quantity": 2002
+    },
+    {
+      "record_group": "no_passed_value",
+      "period": "2026-05",
+      "quantity": 2408
+    },
+    {
+      "record_group": "no_passed_value",
+      "period": "2026-06",
+      "quantity": 2672
+    },
+    {
+      "record_group": "no_passed_value",
+      "period": "2026-07",
+      "quantity": 2545
+    },
+    {
+      "record_group": "no_passed_value",
+      "period": "2026-08",
+      "quantity": 3205
+    },
+    {
+      "record_group": "no_passed_value",
+      "period": "2026-09",
+      "quantity": 379
+    }
+  ],
+  "activation_cohorts": [
+    {
+      "cohort": "in_period",
+      "quantity": 924
+    },
+    {
+      "cohort": "before_period",
+      "quantity": 159
+    }
+  ],
+  "scope_breakdown": [
+    {
+      "period": "2026-04",
+      "sn_group": "allowed_device_SN",
+      "passed_group": "passed_nonnull",
+      "device_group": "active",
+      "quantity": 167
+    },
+    {
+      "period": "2026-04",
+      "sn_group": "allowed_device_SN",
+      "passed_group": "passed_nonnull",
+      "device_group": "inactive_or_missing",
+      "quantity": 106
+    },
+    {
+      "period": "2026-04",
+      "sn_group": "allowed_device_SN",
+      "passed_group": "passed_null",
+      "device_group": "inactive_or_missing",
+      "quantity": 6
+    },
+    {
+      "period": "2026-04",
+      "sn_group": "excluded_prefix_SN",
+      "passed_group": "passed_null",
+      "device_group": "inactive_or_missing",
+      "quantity": 1996
+    },
+    {
+      "period": "2026-05",
+      "sn_group": "allowed_device_SN",
+      "passed_group": "passed_nonnull",
+      "device_group": "active",
+      "quantity": 82
+    },
+    {
+      "period": "2026-05",
+      "sn_group": "allowed_device_SN",
+      "passed_group": "passed_nonnull",
+      "device_group": "inactive_or_missing",
+      "quantity": 4
+    },
+    {
+      "period": "2026-05",
+      "sn_group": "excluded_prefix_SN",
+      "passed_group": "passed_null",
+      "device_group": "inactive_or_missing",
+      "quantity": 2408
+    },
+    {
+      "period": "2026-06",
+      "sn_group": "allowed_device_SN",
+      "passed_group": "passed_nonnull",
+      "device_group": "active",
+      "quantity": 146
+    },
+    {
+      "period": "2026-06",
+      "sn_group": "allowed_device_SN",
+      "passed_group": "passed_nonnull",
+      "device_group": "inactive_or_missing",
+      "quantity": 34
+    },
+    {
+      "period": "2026-06",
+      "sn_group": "excluded_prefix_SN",
+      "passed_group": "passed_null",
+      "device_group": "inactive_or_missing",
+      "quantity": 2672
+    },
+    {
+      "period": "2026-07",
+      "sn_group": "allowed_device_SN",
+      "passed_group": "passed_nonnull",
+      "device_group": "active",
+      "quantity": 312
+    },
+    {
+      "period": "2026-07",
+      "sn_group": "allowed_device_SN",
+      "passed_group": "passed_nonnull",
+      "device_group": "inactive_or_missing",
+      "quantity": 157
+    },
+    {
+      "period": "2026-07",
+      "sn_group": "excluded_prefix_SN",
+      "passed_group": "passed_null",
+      "device_group": "inactive_or_missing",
+      "quantity": 2545
+    },
+    {
+      "period": "2026-08",
+      "sn_group": "allowed_device_SN",
+      "passed_group": "passed_nonnull",
+      "device_group": "active",
+      "quantity": 194
+    },
+    {
+      "period": "2026-08",
+      "sn_group": "allowed_device_SN",
+      "passed_group": "passed_nonnull",
+      "device_group": "inactive_or_missing",
+      "quantity": 240
+    },
+    {
+      "period": "2026-08",
+      "sn_group": "excluded_prefix_SN",
+      "passed_group": "passed_null",
+      "device_group": "inactive_or_missing",
+      "quantity": 3205
+    },
+    {
+      "period": "2026-09",
+      "sn_group": "allowed_device_SN",
+      "passed_group": "passed_nonnull",
+      "device_group": "active",
+      "quantity": 23
+    },
+    {
+      "period": "2026-09",
+      "sn_group": "allowed_device_SN",
+      "passed_group": "passed_nonnull",
+      "device_group": "inactive_or_missing",
+      "quantity": 45
+    },
+    {
+      "period": "2026-09",
+      "sn_group": "excluded_prefix_SN",
+      "passed_group": "passed_null",
+      "device_group": "inactive_or_missing",
+      "quantity": 379
+    }
+  ],
+  "field_metadata": [
+    {
+      "COLUMN_NAME": "SN",
+      "COLUMN_TYPE": "varchar(100)",
+      "COLUMN_COMMENT": "主键"
+    },
+    {
+      "COLUMN_NAME": "passed",
+      "COLUMN_TYPE": "varchar(10)",
+      "COLUMN_COMMENT": "测试结果t"
+    },
+    {
+      "COLUMN_NAME": "active_at",
+      "COLUMN_TYPE": "datetime",
+      "COLUMN_COMMENT": "激活时间"
+    }
+  ],
+  "sales_document_detail_actuals": [
+    {
+      "period": "2026-04",
+      "document_status": "C",
+      "document_count": 2021,
+      "detail_count": 2023,
+      "quantity": "2275.00"
+    },
+    {
+      "period": "2026-05",
+      "document_status": "C",
+      "document_count": 2447,
+      "detail_count": 2449,
+      "quantity": "2494.00"
+    },
+    {
+      "period": "2026-06",
+      "document_status": "C",
+      "document_count": 2726,
+      "detail_count": 2730,
+      "quantity": "2865.00"
+    },
+    {
+      "period": "2026-07",
+      "document_status": "C",
+      "document_count": 2685,
+      "detail_count": 2694,
+      "quantity": "3014.00"
+    },
+    {
+      "period": "2026-08",
+      "document_status": "C",
+      "document_count": 3296,
+      "detail_count": 3306,
+      "quantity": "3639.00"
+    },
+    {
+      "period": "2026-09",
+      "document_status": "C",
+      "document_count": 413,
+      "detail_count": 417,
+      "quantity": "447.00"
+    }
+  ],
+  "detail_join_check": {
+    "joined_rows": 13619,
+    "unique_details": 13619,
+    "quantity": "14734.00"
+  },
+  "summary": {
+    "screen_outbound": 1510.0,
+    "screen_activation": 1083.0,
+    "sales_document_quantity": 14734.0,
+    "outbound_difference": 13224.0,
+    "submitted_forecast": 19260.0
+  }
+}

@@ -4,7 +4,7 @@
     <!-- AI 助手图标按钮 -->
     <ElButton
       v-if="!dialogVisible && !fabCollapsed"
-      class="fixed z-9999 w-15 h-15 shadow-(--el-box-shadow) transition-all duration-300 hover:shadow-(--el-box-shadow-dark)r:scale-110"
+      class="fixed z-9999 w-20 h-20 shadow-(--el-box-shadow) transition-all duration-300 hover:shadow-(--el-box-shadow-dark)r:scale-110"
       type="primary"
       circle
       size="large"
@@ -12,13 +12,13 @@
       @contextmenu.prevent="fabCollapsed = true"
       @click="handleOpen"
     >
-      <FaSvgIcon :icon="resolveIconForFaSvgIcon('ai')" class="w-8 h-8" />
+      <FaSvgIcon :icon="resolveIconForFaSvgIcon('ai')" class="w-10 h-10" />
     </ElButton>
 
     <!-- 收缩态：贴边小标签，避免遮挡表单控件 -->
     <div
       v-if="!dialogVisible && fabCollapsed"
-      class="fixed z-9999 inline-flex items-center justify-center w-10.5 h-10.5 text-sm font-semibold text-(--el-color-white) cursor-pointer select-none bg-(--el-color-primary) rounded-full shadow-(--el-box-shadow)"
+      class="fixed z-9999 inline-flex items-center justify-center w-14 h-14 text-sm font-semibold text-(--el-color-white) cursor-pointer select-none bg-(--el-color-primary) rounded-full shadow-(--el-box-shadow)"
       :style="fabStyle"
       @click="fabCollapsed = false"
     >

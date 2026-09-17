@@ -1,5 +1,6 @@
 """SOP 报告：一期会议报告、快照固化与 docx 导出（收编自 SopAgent api/routes/sop.py 报告侧接口）"""
 
+import calendar
 import urllib.parse
 from datetime import date
 from typing import Annotated
@@ -15,6 +16,7 @@ from app.core.router_class import OperationLogRoute
 from app.modules.sop.database import get_db
 from app.modules.sop.domain import SopService, SopSnapshotService
 from app.modules.sop.domain.docx_exporter import build_sop_report_docx
+from app.modules.sop.domain.warehouse_sync import WarehouseQueryService, WarehouseSyncInProgress
 from app.modules.sop.schemas.sop import (
     SopDimensionOptionsResponse,
     SopFirstPhaseReportResponse,
@@ -25,6 +27,40 @@ from app.modules.sop.schemas.sop import (
 )
 
 SopReportRouter = APIRouter(route_class=OperationLogRoute, prefix="/report", tags=["SOP 报告快照"])
+
+
+MONTH_PATTERN = r"^[1-9][0-9]{3}-(0[1-9]|1[0-2])$"
+
+
+def _period_dates(start_month: str | None, end_month: str | None) -> tuple[date | None, date | None]:
+    if start_month and end_month and start_month > end_month:
+        raise HTTPException(status_code=422, detail="开始月份不能晚于结束月份")
+    start_date = date.fromisoformat(f"{start_month}-01") if start_month else None
+    end_date = None
+    if end_month:
+        first = date.fromisoformat(f"{end_month}-01")
+        end_date = first.replace(day=calendar.monthrange(first.year, first.month)[1])
+    return start_date, end_date
+
+
+@SopReportRouter.post("/refresh", summary="刷新真实报告数据", response_model=ResponseSchema[dict])
+def refresh_report_data(
+    auth: Annotated[AuthSchema, Security(AuthPermission(["module_sop:report:query"]))],
+    db: Annotated[Session, Depends(get_db)],
+) -> JSONResponse:
+    """刷新固定配置的只读数仓报告缓存，不接受导入记录、SQL 或来源配置。"""
+    try:
+        result = WarehouseQueryService(db).sync_from_warehouse()
+    except WarehouseSyncInProgress as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    SopService(db).write_audit(
+        username=auth.user.username,
+        action="refresh_report_data",
+        resource="sop:report-cache",
+        result_status="success",
+        details=result,
+    )
+    return SuccessResponse(data=result, msg="真实报告数据刷新成功")
 
 
 @SopReportRouter.get("/spus/{spu_code}/dimensions", summary="SPU 维度选项", response_model=ResponseSchema[SopDimensionOptionsResponse])
@@ -55,15 +91,24 @@ def get_first_phase_report(
     as_of_date: Annotated[date | None, Query()] = None,
     region: Annotated[str, Query(max_length=128)] = "",
     channel: Annotated[str, Query(max_length=128)] = "",
+    start_month: Annotated[str | None, Query(pattern=MONTH_PATTERN)] = None,
+    end_month: Annotated[str | None, Query(pattern=MONTH_PATTERN)] = None,
 ) -> JSONResponse:
+    # 工作台与会议报告始终使用同一份已同步事实；固化快照通过快照接口单独读取。
+    start_date, end_date = _period_dates(start_month, end_month)
     service = SopService(db)
     response = service.build_first_phase_report(
         spu_code=spu_code,
         as_of_date=as_of_date,
         region=region,
         channel=channel,
+        start_date=start_date,
+        end_date=end_date,
     )
+    source_type = "source"
+
     if response is None:
+        service = SopService(db)
         service.write_audit(
             username=auth.user.username,
             action="read_first_phase_report",
@@ -72,6 +117,7 @@ def get_first_phase_report(
         )
         raise HTTPException(status_code=404, detail="SPU 不存在或尚未完成标准化入库")
 
+    service = SopService(db)
     service.write_audit(
         username=auth.user.username,
         action="read_first_phase_report",
@@ -83,6 +129,9 @@ def get_first_phase_report(
             "report_version": response.report_version,
             "region": region,
             "channel": channel,
+            "source": source_type,
+            "start_month": start_month,
+            "end_month": end_month,
         },
     )
     return SuccessResponse(data=response, msg="获取报告成功")
@@ -96,14 +145,19 @@ def export_first_phase_report_docx(
     as_of_date: Annotated[date | None, Query()] = None,
     region: Annotated[str, Query(max_length=128)] = "",
     channel: Annotated[str, Query(max_length=128)] = "",
+    start_month: Annotated[str | None, Query(pattern=MONTH_PATTERN)] = None,
+    end_month: Annotated[str | None, Query(pattern=MONTH_PATTERN)] = None,
 ) -> StreamingResponse:
     """导出排版规整的飞书/Word (.docx) 格式会议报告."""
+    start_date, end_date = _period_dates(start_month, end_month)
     service = SopService(db)
     response = service.build_first_phase_report(
         spu_code=spu_code,
         as_of_date=as_of_date,
         region=region,
         channel=channel,
+        start_date=start_date,
+        end_date=end_date,
     )
     if response is None:
         raise HTTPException(status_code=404, detail="SPU 不存在或尚未完成标准化入库")

@@ -1,76 +1,67 @@
-<!-- 通知组件 -->
+<!-- 通知组件：铃铛点击直接打开抽屉，卡片展示通知，已读后红点消失 -->
 <template>
-  <div
-    class="fa-notification-panel fa-card-sm shadow-xl! flex flex-col"
-    :style="{
-      transform: show ? 'scaleY(1)' : 'scaleY(0.9)',
-      opacity: show ? 1 : 0,
-    }"
-    v-show="visible"
-    @click.stop
-  >
-    <div class="flex-cb px-3.5 mt-3.5 shrink-0">
-      <span class="text-base font-medium text-g-800">{{ $t("notice.title") }}</span>
-    </div>
+  <div>
+    <!-- 通知列表抽屉 -->
+    <ElDrawer v-model="drawerVisible" title="全部通知" size="480px" :close-on-click-modal="true">
+      <div v-loading="drawerLoading" class="notice-drawer-content">
+        <div v-if="!allNotices.length && !drawerLoading" class="empty-state">
+          <ElEmpty description="暂无通知" />
+        </div>
 
-    <ElScrollbar class="flex-1 min-h-0 overflow-y-scroll scrollbar-thin">
-      <ul>
-        <li
-          v-for="(item, index) in noticeList"
-          :key="item.title + item.time"
-          class="box-border flex-c px-3.5 py-3.5 c-p last:border-b-0 hover:bg-g-200/60"
-          @click="handleMarkAsRead(index)"
+        <div
+          v-for="item in allNotices"
+          :key="item.id"
+          class="notice-item"
+          :class="{ 'is-read': isRead(item.id) }"
+          @click="openNoticeDetail(item)"
         >
-          <div
-            class="size-9 leading-9 text-center rounded-lg flex-cc"
-            :class="item.type === 2 ? 'bg-warning/12 text-warning' : 'bg-theme/12 text-theme'"
-          >
-            <FaSvgIcon class="text-lg bg-transparent!" :icon="getNoticeIcon(item.type)" />
+          <div class="notice-item-header">
+            <div class="header-left">
+              <ElTag :type="item.notice_type === '2' ? 'warning' : 'primary'" size="small">
+                {{ item.notice_type === "2" ? "公告" : "通知" }}
+              </ElTag>
+              <span v-if="!isRead(item.id)" class="unread-dot" />
+            </div>
+            <span class="notice-time">{{ formatTime(item.created_time) }}</span>
           </div>
-          <div class="w-[calc(100%-45px)] ml-3.5">
-            <h4 class="text-sm font-normal leading-5.5 text-g-900">{{ item.title }}</h4>
-            <p class="mt-1.5 text-xs text-g-500">{{ item.time }}</p>
-          </div>
-          <div v-if="!item.read" class="ml-2 size-2 rounded-full bg-danger shrink-0"></div>
-        </li>
-      </ul>
-
-      <!-- 空状态 -->
-      <div
-        v-show="noticeList.length === 0"
-        class="h-full text-g-500 text-center bg-transparent! flex flex-col items-center justify-center mt-12"
-      >
-        <FaSvgIcon icon="system-uicons:inbox" class="text-5xl" />
-        <p class="mt-3.5 text-xs bg-transparent!">{{ $t("notice.empty") }}</p>
+          <h4 class="notice-title">{{ item.notice_title }}</h4>
+          <p class="notice-desc">{{ item.description || stripHtml(item.notice_content) }}</p>
+        </div>
       </div>
-    </ElScrollbar>
+    </ElDrawer>
 
-    <div class="box-border w-full px-3.5 pt-2 pb-3.5 shrink-0">
-      <ElButton class="w-full" @click="handleViewAll" v-ripple>
-        {{ $t("notice.viewAll") }}
-      </ElButton>
-    </div>
+    <!-- 通知详情对话框 -->
+    <ElDialog v-model="detailVisible" title="通知详情" width="600px" @close="handleDetailClose">
+      <div v-if="detailNotice" class="notice-detail">
+        <div class="detail-header">
+          <ElTag :type="detailNotice.notice_type === '2' ? 'warning' : 'primary'">
+            {{ detailNotice.notice_type === "2" ? "公告" : "通知" }}
+          </ElTag>
+          <h3>{{ detailNotice.notice_title }}</h3>
+          <p class="detail-meta">
+            <span>{{ detailNotice.created_by?.name || "未知" }}</span>
+            <span>{{ formatTime(detailNotice.created_time) }}</span>
+          </p>
+        </div>
+        <ElDivider />
+        <div class="detail-content">
+          <FaMarkdownRenderer :content="detailNotice.notice_content || ''" />
+        </div>
+      </div>
+    </ElDialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from "vue";
-import { useRouter } from "vue-router";
-
-import NoticeAPI from "@/api/module_system/notice";
+import { ref } from "vue";
+import NoticeAPI, { type NoticeTable } from "@/api/module_system/notice";
+import { useNoticeStore } from "@stores";
+import FaMarkdownRenderer from "@/components/display/fa-markdown-renderer/index.vue";
 
 defineOptions({ name: "FaNotification" });
 
-const router = useRouter();
-
-interface NoticeItem {
-  title: string;
-  time: string;
-  read: boolean;
-  type: number;
-}
-
 interface Props {
+  /** 兼容旧接口：父组件仍传 v-model:value，点击铃铛即打开抽屉 */
   value: boolean;
 }
 
@@ -82,105 +73,182 @@ interface Emits {
 
 const emit = defineEmits<Emits>();
 
-const show = ref(false);
-const visible = ref(false);
-const noticeList = ref<NoticeItem[]>([]);
-const loading = ref(false);
+const noticeStore = useNoticeStore();
 
-const getNoticeIcon = (type: number) =>
-  type === 2 ? "ri:megaphone-line" : "ri:notification-3-line";
+const drawerVisible = ref(false);
+const drawerLoading = ref(false);
+const allNotices = ref<NoticeTable[]>([]);
 
-const fetchNotices = async () => {
-  loading.value = true;
+const detailVisible = ref(false);
+const detailNotice = ref<NoticeTable | null>(null);
+
+const fetchAllNotices = async () => {
+  drawerLoading.value = true;
   try {
+    // available 接口只需登录态，普通用户可访问
     const res = await NoticeAPI.listNoticeAvailable();
-    const items = res.data?.data ?? [];
-    noticeList.value = items.map((n) => ({
-      title: n.notice_title ?? "",
-      time: n.created_time ?? "",
-      read: false,
-      type: Number(n.notice_type) || 1,
-    }));
+    allNotices.value = res.data?.data ?? [];
   } catch {
-    noticeList.value = [];
+    allNotices.value = [];
   } finally {
-    loading.value = false;
+    drawerLoading.value = false;
   }
 };
 
-onMounted(() => fetchNotices());
-watch(visible, (v) => {
-  if (v) fetchNotices();
-});
+const isRead = (id?: number) => (id === undefined ? true : noticeStore.readIds.includes(id));
 
-const handleViewAll = () => {
-  router.push("/system/notice");
-  emit("update:value", false);
+const openNoticeDetail = (item: NoticeTable) => {
+  detailNotice.value = item;
+  detailVisible.value = true;
+  drawerVisible.value = false;
+  // 标记已读：红点消失，铃铛角标同步减少
+  noticeStore.markAsRead(item.id);
 };
 
-const handleMarkAsRead = (index: number) => {
-  const item = noticeList.value[index];
-  if (item && !item.read) {
-    item.read = true;
-    // 本地标记已读；全局计数由 noticeStore 管理
-  }
+const handleDetailClose = () => {
+  detailVisible.value = false;
+  detailNotice.value = null;
 };
 
-const showNotice = (open: boolean) => {
-  if (open) {
-    visible.value = true;
-    setTimeout(() => {
-      show.value = true;
-    }, 5);
-  } else {
-    show.value = false;
-    setTimeout(() => {
-      visible.value = false;
-    }, 350);
-  }
+const formatTime = (iso?: string) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
 
+const stripHtml = (html?: string) => {
+  if (!html) return "";
+  return html.replace(/<[^>]*>/g, "").substring(0, 100);
+};
+
+// 铃铛点击 → 直接打开抽屉
 watch(
   () => props.value,
-  (newValue) => {
-    showNotice(newValue);
+  (open) => {
+    if (open) {
+      drawerVisible.value = true;
+      fetchAllNotices();
+      emit("update:value", false); // 立即复位，下次点击铃铛可再次触发
+    }
   }
 );
 </script>
 
 <style scoped>
-@reference '@styles/tailwind.css';
-
-.fa-notification-panel {
-  @apply absolute 
-  top-14.5
-  right-5 
-  w-90 
-  h-125
-  overflow-hidden 
-  transition-all 
-  duration-300
-  origin-top 
-  will-change-[top,left] 
-  max-[640px]:top-16.25
-  max-[640px]:right-0
-  max-[640px]:w-full 
-  max-[640px]:h-[80vh];
+.notice-drawer-content {
+  padding: 8px 0;
 }
 
-.fa-notification-panel.fa-notification-panel {
-  border-radius: calc(var(--custom-radius) + 2px) !important;
+.empty-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
 }
 
-.scrollbar-thin::-webkit-scrollbar {
-  width: 5px !important;
+.notice-item {
+  padding: 16px;
+  margin-bottom: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid #eef2f6;
 }
 
-.dark .scrollbar-thin::-webkit-scrollbar-track {
-  background-color: var(--default-box-color);
+.notice-item:hover {
+  background: #f1f5f9;
+  border-color: #d0e3ff;
+  transform: translateX(4px);
 }
 
-.dark .scrollbar-thin::-webkit-scrollbar-thumb {
-  background-color: var(--fa-scrollbar-thumb-dark) !important;
+.notice-item.is-read {
+  opacity: 0.75;
+  background: #fff;
+}
+
+.notice-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.unread-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f56c6c;
+}
+
+.notice-time {
+  font-size: 12px;
+  color: #999;
+}
+
+.notice-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+  line-height: 1.4;
+}
+
+.notice-item.is-read .notice-title {
+  font-weight: 500;
+  color: #555;
+}
+
+.notice-desc {
+  margin: 0;
+  font-size: 13px;
+  color: #666;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 通知详情样式 */
+.notice-detail {
+  padding: 8px 0;
+}
+
+.detail-header {
+  margin-bottom: 16px;
+}
+
+.detail-header h3 {
+  margin: 12px 0 8px;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.detail-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: #666;
+}
+
+.detail-content {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #333;
 }
 </style>

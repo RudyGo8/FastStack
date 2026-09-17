@@ -7,9 +7,9 @@
 conftest 会重复执行模块级初始化（临时库/引擎错位），曾导致迁移守卫误报。
 """
 
-from fastapi.testclient import TestClient
 from unittest.mock import patch
 
+from fastapi.testclient import TestClient
 
 def test_sop_routes_require_auth(test_client: TestClient) -> None:
     for path in [
@@ -35,7 +35,16 @@ def test_sop_routes_registered(test_client: TestClient, auth_headers: dict[str, 
 
 
 def test_document_chunks_are_filtered_by_filename(test_client: TestClient, auth_headers: dict[str, str]) -> None:
-    chunks = [{"chunk_id": "c1", "ordinal": 2, "text": "第二段", "metadata": {"filename": "policy.pdf"}}]
+    chunks = [
+        {
+            "chunk_id": "c1",
+            "chunk_idx": 2,
+            "text_preview": "第二段",
+            "file_type": "pdf",
+            "page_number": 3,
+            "chunk_level": 1,
+        }
+    ]
     with patch("app.modules.sop.document.controller.parent_chunk_store.get_chunks_by_filename", return_value=chunks):
         response = test_client.get("/sop/documents/policy.pdf/chunks", headers=auth_headers)
 

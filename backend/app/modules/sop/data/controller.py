@@ -12,6 +12,7 @@ from app.core.router_class import OperationLogRoute
 from app.modules.sop.database import get_db
 from app.modules.sop.domain import SopService, WarehouseQueryService
 from app.modules.sop.domain.ingestion import SopIngestionService
+from app.modules.sop.domain.warehouse_sync import WarehouseSyncInProgress
 from app.modules.sop.schemas.sop import (
     SopActivationImportRequest,
     SopDataStatusResponse,
@@ -144,10 +145,13 @@ def import_events(
 def sync_warehouse(
     auth: Annotated[AuthSchema, Security(AuthPermission(["module_sop:data:sync"]))],
     db: Annotated[Session, Depends(get_db)],
-) -> dict:
+) -> JSONResponse:
     """从企业只读数仓 (big_data_dw) 同步 SPU、预测与真实已发货订单事实."""
     service = WarehouseQueryService(db)
-    result = service.sync_from_warehouse()
+    try:
+        result = service.sync_from_warehouse()
+    except WarehouseSyncInProgress as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     SopService(db).write_audit(
         username=auth.user.username,
         action="warehouse_sync",
@@ -155,4 +159,4 @@ def sync_warehouse(
         result_status="success",
         details=result,
     )
-    return {"message": "数仓数据同步成功", "details": result}
+    return SuccessResponse(data=result, msg="数仓数据同步成功")

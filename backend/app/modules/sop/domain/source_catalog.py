@@ -24,10 +24,14 @@ SOURCE_CATALOG: tuple[SopSourceDefinition, ...] = (
     SopSourceDefinition(
         domain="historical_sales",
         label="历史销售与出库",
-        source_objects=("dw_c_sal_predict_jst_order", "import_sales_forecast_spu_model"),
+        source_objects=(
+            "dw_a_sal_order_*",
+            "dw_a_sal_out*",
+            "dw_c_sal_predict_jst_order",
+        ),
         phase_scope="phase_one_core",
         contract_status="fields_pending",
-        note="按已发货订单关联产品编码映射，保留真实日粒度出库数量；不补齐无法映射的物料。",
+        note="订单表：dw_a_sal_order_* / dw_c_sal_predict_jst_order；出库单表：dw_a_sal_out* / dw_c_sal_predict_jst_order。按已发货订单关联产品编码映射，保留真实日粒度出库数量；不补齐无法映射的物料。",
     ),
     SopSourceDefinition(
         domain="forecast",

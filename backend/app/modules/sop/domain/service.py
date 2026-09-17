@@ -1,10 +1,17 @@
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from uuid import uuid4
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+from app.modules.sop.domain.channels import (
+    REPORT_CHANNEL_ALIASES,
+    REPORT_CHANNELS,
+    RETAINED_CHANNEL_NAMES,
+    ROLLUP_CHANNELS,
+    normalize_report_channel,
+)
 from app.modules.sop.domain.rules import validate_forecast
 from app.modules.sop.domain.source_catalog import CORE_DOMAINS, SOURCE_CATALOG
 from app.modules.sop.domain.source_database import is_source_database_configured
@@ -20,6 +27,7 @@ from app.modules.sop.models.db_sop import (
     SopSpuMapping,
 )
 from app.modules.sop.schemas.sop import (
+    SopChannelMonthlyActual,
     SopDataStatusResponse,
     SopDimensionOptionsResponse,
     SopFirstPhaseReportResponse,
@@ -50,6 +58,15 @@ def _month_key(value: date) -> str:
     return value.strftime("%Y-%m")
 
 
+SUBMITTED_FORECAST_TYPES = ("sales_submission", "sales_reported", "submit")
+
+
+def _prefer_channel_detail(rows):
+    """明细渠道存在时舍弃旧版全渠道汇总行，避免事实被重复累计。"""
+    detail_dates = {row.business_date for row in rows if str(row.channel or "").strip() not in ROLLUP_CHANNELS}
+    return [row for row in rows if str(row.channel or "").strip() not in ROLLUP_CHANNELS or row.business_date not in detail_dates]
+
+
 class SopService:
     def __init__(self, db: Session):
         self.db = db
@@ -69,8 +86,9 @@ class SopService:
                     SopSpu.product_line.like(pattern),
                 )
             )
+        total = query.count()
         rows = query.order_by(SopSpu.spu_code.asc()).limit(min(max(limit, 1), 500)).all()
-        return SopSpuListResponse(items=[_spu_info(row) for row in rows], total=len(rows))
+        return SopSpuListResponse(items=[_spu_info(row) for row in rows], total=total)
 
     def list_dimension_options(self, spu_code: str) -> SopDimensionOptionsResponse | None:
         canonical_code = spu_code.strip()
@@ -91,20 +109,15 @@ class SopService:
                 .all()
             )
             regions.update(row.region for row in rows if row.region)
-            channels.update(row.channel for row in rows if row.channel)
+            channels.update(normalize_report_channel(row.channel) for row in rows if row.channel and row.channel.strip() not in ROLLUP_CHANNELS)
         return SopDimensionOptionsResponse(
             regions=sorted(regions),
-            channels=sorted(channels),
+            channels=[name for name in REPORT_CHANNELS if name in channels],
         )
 
     def get_data_status(self) -> SopDataStatusResponse:
         latest_by_domain: dict[str, SopSourceSnapshot] = {}
-        snapshots = (
-            self.db.query(SopSourceSnapshot)
-            .filter(SopSourceSnapshot.source_system != "seed-demo")
-            .order_by(SopSourceSnapshot.snapshot_at.desc(), SopSourceSnapshot.id.desc())
-            .all()
-        )
+        snapshots = self.db.query(SopSourceSnapshot).filter(SopSourceSnapshot.source_system != "seed-demo").order_by(SopSourceSnapshot.snapshot_at.desc(), SopSourceSnapshot.id.desc()).all()
         for snapshot in snapshots:
             latest_by_domain.setdefault(snapshot.domain, snapshot)
 
@@ -151,6 +164,8 @@ class SopService:
         as_of_date: date | None = None,
         region: str = "",
         channel: str = "",
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> SopFirstPhaseReportResponse | None:
         canonical_code = spu_code.strip()
         spu = self.db.query(SopSpu).filter(SopSpu.spu_code == canonical_code).first()
@@ -158,7 +173,10 @@ class SopService:
             return None
 
         cutoff = as_of_date or date.today()
-        history_start = cutoff - timedelta(days=370)
+        history_start = start_date or (cutoff - timedelta(days=370)).replace(day=1)
+        history_end = min(end_date or cutoff, cutoff)
+        if start_date and end_date and start_date > end_date:
+            raise ValueError("开始月份不能晚于结束月份")
         forecast_end = cutoff + timedelta(days=370)
 
         selected_region = region.strip()
@@ -168,32 +186,53 @@ class SopService:
             SopSalesDaily.spu_code == canonical_code,
             SopSalesDaily.source_system != "seed-demo",
             SopSalesDaily.business_date >= history_start,
-            SopSalesDaily.business_date <= cutoff,
+            SopSalesDaily.business_date <= history_end,
         )
         activation_query = self.db.query(SopActivationDaily).filter(
             SopActivationDaily.spu_code == canonical_code,
             SopActivationDaily.source_system != "seed-demo",
             SopActivationDaily.business_date >= history_start,
-            SopActivationDaily.business_date <= cutoff,
+            SopActivationDaily.business_date <= history_end,
         )
         forecast_query = self.db.query(SopForecastMonthly).filter(
             SopForecastMonthly.spu_code == canonical_code,
             SopForecastMonthly.source_system != "seed-demo",
-            SopForecastMonthly.forecast_month >= history_start,
+            SopForecastMonthly.forecast_type.in_(SUBMITTED_FORECAST_TYPES),
+            SopForecastMonthly.forecast_month >= (cutoff - timedelta(days=370)).replace(day=1),
             SopForecastMonthly.forecast_month <= forecast_end,
+            SopForecastMonthly.snapshot_at < datetime.combine(cutoff + timedelta(days=1), time.min),
         )
         if selected_region:
             sales_query = sales_query.filter(SopSalesDaily.region == selected_region)
             activation_query = activation_query.filter(SopActivationDaily.region == selected_region)
             forecast_query = forecast_query.filter(SopForecastMonthly.region == selected_region)
         if selected_channel:
-            sales_query = sales_query.filter(SopSalesDaily.channel == selected_channel)
-            activation_query = activation_query.filter(SopActivationDaily.channel == selected_channel)
-            forecast_query = forecast_query.filter(SopForecastMonthly.channel == selected_channel)
 
-        sales_rows = sales_query.order_by(SopSalesDaily.business_date.asc()).all()
-        activation_rows = activation_query.order_by(SopActivationDaily.business_date.asc()).all()
-        forecast_rows = forecast_query.order_by(SopForecastMonthly.forecast_month.asc()).all()
+            def channel_filter(model):
+                column = func.trim(func.coalesce(model.channel, ""))
+                if selected_channel == "其他":
+                    return column.notin_((*RETAINED_CHANNEL_NAMES, *ROLLUP_CHANNELS))
+                aliases = REPORT_CHANNEL_ALIASES.get(normalize_report_channel(selected_channel))
+                return column.in_(aliases) if aliases else column == selected_channel
+
+            sales_query = sales_query.filter(channel_filter(SopSalesDaily))
+            activation_query = activation_query.filter(channel_filter(SopActivationDaily))
+            forecast_query = forecast_query.filter(channel_filter(SopForecastMonthly))
+
+        sales_rows = _prefer_channel_detail(sales_query.order_by(SopSalesDaily.business_date.asc()).all())
+        activation_rows = _prefer_channel_detail(activation_query.order_by(SopActivationDaily.business_date.asc()).all())
+        forecast_candidates = forecast_query.order_by(SopForecastMonthly.forecast_month.asc()).all()
+        latest_forecasts: dict[tuple[date, str, str], SopForecastMonthly] = {}
+        for row in forecast_candidates:
+            key = (row.forecast_month, row.region, row.channel)
+            existing = latest_forecasts.get(key)
+            if existing is None or (row.snapshot_at, row.id) > (existing.snapshot_at, existing.id):
+                latest_forecasts[key] = row
+        detail_forecast_grains = {(row.forecast_month, row.region) for row in latest_forecasts.values() if str(row.channel or "").strip() not in ROLLUP_CHANNELS}
+        forecast_rows = sorted(
+            (row for row in latest_forecasts.values() if str(row.channel or "").strip() not in ROLLUP_CHANNELS or (row.forecast_month, row.region) not in detail_forecast_grains),
+            key=lambda row: (row.forecast_month, row.region, row.channel),
+        )
         event_rows = (
             self.db.query(SopMonthlyEvent)
             .filter(
@@ -221,6 +260,19 @@ class SopService:
             scoped_activations[(row.region, row.channel)][period] += value
 
         monthly_actuals = [SopMonthlyActual(period=period, **monthly[period]) for period in sorted(monthly)]
+        channel_actuals = [
+            SopChannelMonthlyActual(
+                period=period,
+                region=actual_region,
+                channel=actual_channel,
+                outbound_qty=scoped_sales.get((actual_region, actual_channel), {}).get(period, 0.0),
+                activation_qty=scoped_activations.get((actual_region, actual_channel), {}).get(period, 0.0),
+            )
+            for actual_region, actual_channel, period in sorted(
+                {(actual_region, actual_channel, period) for (actual_region, actual_channel), periods in scoped_sales.items() for period in periods}
+                | {(actual_region, actual_channel, period) for (actual_region, actual_channel), periods in scoped_activations.items() for period in periods}
+            )
+        ]
 
         all_history = [point.activation_qty if point.activation_qty > 0 else point.outbound_qty for point in monthly_actuals]
         forecasts: list[SopForecastPoint] = []
@@ -285,16 +337,39 @@ class SopService:
         if not checks and forecast_rows:
             warnings.append("预测数据存在，但未生成有效校验结果。")
 
+        # A complete batch watermark remains available even when the selected channel has no rows.
+        batch_domains: dict[str, dict[str, datetime]] = defaultdict(dict)
+        source_synced_at = None
+        completed = (
+            self.db.query(SopSourceSnapshot)
+            .filter(
+                SopSourceSnapshot.source_system == "BIG_DATA_DW",
+                SopSourceSnapshot.status == "completed",
+                SopSourceSnapshot.domain.in_(CORE_DOMAINS),
+                SopSourceSnapshot.snapshot_at < datetime.combine(cutoff + timedelta(days=1), time.min),
+            )
+            .order_by(SopSourceSnapshot.snapshot_at.desc(), SopSourceSnapshot.id.desc())
+            .limit(64)
+            .all()
+        )
+        for item in completed:
+            batch_domains[item.batch_id][item.domain] = item.snapshot_at
+            if CORE_DOMAINS.issubset(batch_domains[item.batch_id]):
+                source_synced_at = min(batch_domains[item.batch_id].values())
+                break
+
         provenance = self._collect_provenance(sales_rows, activation_rows, forecast_rows)
         events = [SopMonthlyEventInfo(event_month=row.event_month, event=row.event_text) for row in event_rows]
         return SopFirstPhaseReportResponse(
             spu=_spu_info(spu),
             as_of_date=cutoff,
+            source_synced_at=source_synced_at,
             filters=SopReportFilters(region=selected_region, channel=selected_channel),
             completeness_status=completeness_status,
             missing_domains=missing_domains,
             warnings=warnings,
             monthly_actuals=monthly_actuals,
+            channel_actuals=channel_actuals,
             events=events,
             forecasts=forecasts,
             forecast_checks=checks,
