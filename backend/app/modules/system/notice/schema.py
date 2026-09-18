@@ -1,10 +1,3 @@
-from app.core.base_schema import (
-    BaseQueryParam,
-    BaseSchema,
-    UserByQueryParam,
-    UserBySchema,
-)
-from app.utils.xss_util import sanitize_html
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -12,6 +5,14 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+from app.core.base_schema import (
+    BaseQueryParam,
+    BaseSchema,
+    UserByQueryParam,
+    UserBySchema,
+)
+from app.utils.xss_util import sanitize_html
 
 
 class NoticeCreateSchema(BaseModel):

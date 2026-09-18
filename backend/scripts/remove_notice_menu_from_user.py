@@ -1,6 +1,8 @@
 """移除普通用户角色的公告管理菜单权限（使用原始 SQL 避免模型依赖问题）"""
 import asyncio
+
 import aiomysql
+
 from app.config.setting import settings
 
 

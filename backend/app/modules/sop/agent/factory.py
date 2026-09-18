@@ -1,3 +1,6 @@
+from langchain.agents import create_agent
+from langchain.chat_models import init_chat_model
+
 from app.modules.sop.config import (
     AGENT_RECURSION_LIMIT,
     ARK_API_KEY,
@@ -6,8 +9,6 @@ from app.modules.sop.config import (
     MAIN_MODEL_THINKING,
     MODEL,
 )
-from langchain.agents import create_agent
-from langchain.chat_models import init_chat_model
 
 SOP_SYSTEM_PROMPT = """你是由rudy开发的智能助手。
 

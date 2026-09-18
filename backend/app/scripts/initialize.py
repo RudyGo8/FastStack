@@ -11,14 +11,14 @@ from app.config.setting import settings
 from app.core.base_model import MappedBase
 from app.core.database import async_db_session, async_engine, create_tables
 from app.core.logger import logger
+from app.modules.sop.menu_sync import reconcile_ai_menus, reconcile_sop_menus
 from app.modules.system.dept.model import DeptModel
 from app.modules.system.dict.model import DictDataModel, DictTypeModel
 from app.modules.system.menu.model import MenuModel
 from app.modules.system.params.model import ParamsModel
-from app.modules.system.role.model import RoleModel, RoleMenusModel
+from app.modules.system.role.model import RoleMenusModel, RoleModel
 from app.modules.system.user.model import UserModel, UserRolesModel
 from app.modules.system.versions.model import VersionModel
-from app.modules.sop.menu_sync import reconcile_ai_menus, reconcile_sop_menus
 from app.modules.task.cronjob.node.model import NodeModel
 from app.modules.task.storage.node.model import StorageNodeModel
 from app.utils.import_util import ImportUtil

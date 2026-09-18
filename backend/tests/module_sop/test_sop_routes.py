@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+
 def test_sop_routes_require_auth(test_client: TestClient) -> None:
     for path in [
         "/sop/data/status",

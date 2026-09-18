@@ -1,177 +1,130 @@
 ---
-name: "sopfast-dev"
-description: "SopFast (based on FastapiAdmin) full-stack dev guide: repo map, run/verify commands, backend module & frontend web conventions. Invoke before writing code, creating modules/pages, debugging, or running builds/tests in this repo."
+name: sopfast-dev
+description: "SopFast 仓库开发操作指南。适用于本项目的开发、调试、测试、数据库变更与发布操作。"
 ---
 
-# SopFast 全栈开发指南
+# SopFast 开发操作指南
 
-在本仓库做任何开发、调试、构建之前，先按本 skill 对齐工程结构与约定，避免跨端改漏、命名错位。
+本文件维护操作步骤和命令。项目入口见 [README.md](README.md)，业务验收见 [prd.md](prd.md)，架构和执行约束见 `AGENTS.md` / `CLAUDE.md`。
 
-## 1. 工程地图
+## 1. 开始任务
 
-| 目录 | 说明 | 技术栈 |
-| --- | --- | --- |
-| `backend/` | 后端服务（入口 `main.py`，本地端口见 `app/config/setting.py` 的 SERVER_PORT，通常 8001） | FastAPI + SQLAlchemy + Alembic + Redis + uv |
-| `frontend/web/` | 管理后台（pnpm 包，Node >= 20） | Vue3 + Vite + TS + Element Plus + Tailwind4 + Pinia |
-| `frontend/app/` | 小程序/移动端 | uni-app（有独立约定，见 `frontend/app/.agents/skills/wot-ui-*`） |
-| `docker/` | 部署（backend/mysql/nginx/redis） | docker-compose |
-| 根目录 | `README.md`、`REQUIREMENTS.md`、`CONTRIBUTING.md` | 需求与规范，做大功能前先读 |
+1. 执行 `git status --short`，确认已有修改及任务范围。
+2. 阅读对应约束、需求、相邻代码和已有测试，明确验收条件与数据依赖。
+3. 定位后端 Controller、领域服务、前端 API、页面、菜单与权限的对应关系；跨端任务同时评估 Web 和移动端。
+4. 数据口径未确认时记录缺口，不自行推断映射；继续处理不依赖该口径的部分。
 
-### backend/app 关键位置
+## 2. 开发环境
 
-| 位置 | 说明 |
+首次启动优先在根目录执行 `./run.sh`，详见 README。手动启动时：
+
+```bash
+# 根目录：配置文件缺失时从模板复制，已有文件不覆盖
+cp -n backend/env/.env.example backend/env/.env.dev
+cp -n frontend/web/.env.development.example frontend/web/.env.development
+# 编辑 .env.dev，使系统连接与根目录 Compose 的 MySQL 3309、Redis 6381 一致
+# 同时核对 SOP 的 MYSQL_*、SOP_REDIS_URL、MILVUS_* 与模型配置
+
+docker compose up -d
+
+# backend/ 内
+uv sync
+uv run main.py run --env=dev
+
+# frontend/web/ 内，另开终端
+pnpm install
+pnpm dev
+```
+
+Web 通用 `.env` 缺失时需配置 `VITE_PORT=5180`、`VITE_APP_BASE_API=/api/v1`、`VITE_BASE_URL=/`；其他通用选项参考现有前端配置与工程说明。开发 mode 使用 `.env.development`，生产 mode 使用 `.env.production`。
+
+系统连接由 `backend/app/config/setting.py` 管理；SOP 独立读取 `backend/app/modules/sop/config.py`。系统层支持多种数据库，不代表完整 SOP 可以只用 SQLite 启动。公司数仓只读连接使用 `SOP_SOURCE_MYSQL_*`，与可写应用库分开。
+
+Vite 将 `/api/v1` 代理到 `VITE_API_BASE_URL`；普通 AI WebSocket 使用 `VITE_APP_WS_ENDPOINT`。后端测试通常请求 `/sop/...` 等实际路由，不将代理前缀直接套入测试。
+
+停止本机前后端可使用 Ctrl+C；停止开发基础设施使用根目录 `docker compose stop`。
+
+## 3. 实现功能
+
+- 标准 CRUD 参考 `backend/app/modules/system/dict/`；SOP 按 `domain/`、`services/` 等现有职责扩展。
+- 内置路由在 `backend/app/api/v1/routers.py` 注册；新增动态插件后重启服务并检查实际路由，避免与内置注册重复。
+- SOP/AI 声明管理的菜单在 `backend/app/modules/sop/menu_sync.py` 修改；通用种子数据在 `backend/sql/`。不要只改数据库中的受管菜单。
+- 前端普通接口在 `frontend/web/src/api/` 维护；SOP 聊天 API 位于 `module_ai/sop_chat.ts`，共享流解析器为 `module_ai/sse.ts`。
+- 页面优先复用 `components/` 与 `hooks/core/`；报表转换复用 `views/module_sop/shared/`。权限字符串与后端、菜单保持一致。
+- 修改移动端时阅读 `frontend/app/.agents/skills/` 对应说明，依赖和命令在该端独立执行。
+
+## 4. 数据库变更
+
+先检查模型所属 Base、目标数据库、现有迁移和数据影响。当前 Alembic 的 `target_metadata` 为系统 `MappedBase.metadata`；SOP 使用独立 Base，不能假定自动生成会包含 SOP 表变更。
+
+```bash
+# backend/ 内：仅在已确认迁移覆盖范围后执行
+uv run main.py revision --env=dev -m "迁移说明"
+# 检查生成脚本，确认没有意外删表、删列或数据丢失
+uv run main.py upgrade --env=dev
+```
+
+系统初始化会自举空库、处理已有迁移和种子数据；dev 下还会尝试自动生成并应用模型差异。启动可能改变数据库或迁移文件，执行前确认目标连接。
+
+SOP 启动建表使用 `init_sop_tables()` / `create_all(checkfirst=True)`，无法升级已有表结构。SOP 模型变更需明确迁移覆盖方案并验证，不能仅重启服务。
+
+## 5. 验证与交付
+
+| 改动 | 最小验证 |
 | --- | --- |
-| `modules/<模块>/<功能>/` | 业务模块：controller/service/crud/model/schema + 模块根 `plugin.toml` |
-| `plugin/` | 独立插件目录（顶级目录名以 `module_` 开头），与 modules 同构、可插拔 |
-| `api/v1/routers.py` | 全部路由的注册处 |
-| `core/` | 基建：database、base_crud、base_model、security、permission、dependencies、exceptions、ap_scheduler（定时任务）、sse_manager、middlewares |
-| `scripts/initialize.py` | 启动时自动执行迁移并导入 `sql/*.json` 种子数据 |
-| `sql/*.json` | 菜单/角色/用户/部门/字典/参数等种子数据 |
-| `templates/{python,ts,vue}/` | 代码生成器 jinja2 模板 |
-| `tests/` | pytest（conftest 自建临时库并初始化数据） |
-| `utils/` | crypto/password/excel/upload/xss 等工具函数 |
-
-### frontend/web/src 关键位置
-
-| 位置 | 说明 |
-| --- | --- |
-| `api/module_x/` | API 层，与后端模块一一对应 |
-| `views/module_x/` | 业务页面；页面私有组件放同目录 `components/` |
-| `components/` | 公共组件 FaXxx（forms/tables/charts/modal/display 等）——写页面前先找现成的 |
-| `hooks/core/` | 开发套件：useTable、useCrudForm、useCrudDialog、useTableColumns、useAuth、useImportExport、useConfirm |
-| `directives/permission/` | `v-hasPerm` 按钮权限指令 |
-| `router/` | `routes.ts` 静态壳 + guards/MenuProcessor/RouteRegistry 动态路由管道 |
-| `store/modules/` | pinia stores（user/worktab/menu/setting/dict…），持久化用 pinia-plugin-persistedstate |
-| `locales/langs/` | i18n 词条（zh.json / en.json） |
-| `utils/` | http(request 封装)、auth、storage、navigation、download、sse 等 |
-
-## 2. 常用命令
-
-后端（`cd backend`，优先用 uv）：
+| 后端业务 | 对应 pytest 用例；接口变更检查鉴权、参数和响应 |
+| TS / Vue | 对应 Vitest 用例与类型检查 |
+| 筛选、报表、导出 | 同条件结果一致性；必要时浏览器核验 |
+| Agent / RAG / SSE | 工具和检索边界、用户隔离、流协议与取消 |
+| 数据模型 | 迁移内容、覆盖范围与数据兼容性 |
+| 发布 | 类型检查、测试、构建及实际服务入口 |
+| 纯文档 | 路径、引用、约束同步与 `git diff --check` |
 
 ```bash
-uv run main.py run --env=dev          # 启动（dev 默认，DEBUG=True 时自动 reload）
-uv run main.py revision -m "说明"      # 生成 Alembic 迁移（autogenerate）
-uv run main.py upgrade --env=dev      # 应用迁移到 head
-uv run pytest                         # 跑 tests/
+# backend/ 内，按范围选择
+uv run pytest tests/module_sop
+uv run pytest tests/module_system/test_auth_permissions.py
+uv run ruff check app/modules/sop tests/module_sop
+
+# frontend/web/ 内，按范围选择
+pnpm test src/views/module_sop
+pnpm test src/views/module_ai
+pnpm ts:check
+pnpm build
 ```
 
-前端 web（`cd frontend/web`）：
+`pnpm lint` 含自动修复和格式化，先检查脚本并限定文件，避免全仓改写。修改行为时使用能验证实际结果的回归用例；“路由存在”或吞异常的测试不能证明功能正确。
+
+交付说明包含改动范围、验证结果、未验证内容及数据依赖。提交经授权后遵循 commitlint / husky，使用 feat、fix、docs、refactor 等类型。
+
+### 改动与版本记录
+
+- 每个独立目的使用清晰的 Git 提交；有 PR 时说明问题、最终行为和验证结果。尚未提交的改动在交付说明中标明，不伪造提交或发布状态。
+- 功能、修复、不兼容变更和重要工程变化，在根目录 `CHANGELOG.md` 的“未发布”中补充；同一任务后续修正合并为一条，不记录每次工具调用或重复格式化。
+- 技术栈变化同步更新 README；需求变化更新 PRD；开发步骤变化更新 SKILL；约束变化同时更新 AGENTS 与 CLAUDE。
+- 正式发布时确认 SopFast 整体版本，把对应“未发布”条目归入 `版本号 — YYYY-MM-DD`，补充迁移、配置及升级事项。版本采用 `主版本.次版本.修订号`：不兼容变化、兼容新增功能、兼容修复分别考虑对应递增。
+- 发布经授权后创建对应 `vX.Y.Z` Git 标签并关联已验证的提交，保留“未发布”入口。各端包版本与整体发布版本分别管理，不直接把脚手架版本当作项目发布记录。
+
+## 6. 常见排查入口
+
+- 重复请求/连接：用 `rg` 定位回调来源，检查页面激活/停用清理、CONNECTING 守卫、单层 KeepAlive 和登出缓存驱逐。缓存相关代码位于 `frontend/web/src/layouts/fa-page-content/index.vue`、`frontend/web/src/store/modules/worktab.store.ts`。
+- 筛选错数据：检查请求序号/取消、失败清空、API 参数、来源同步时间及原始事实，最后再判断业务口径。
+- 前端托管失败：检查 `backend/app/config/path_conf.py` 的 `FRONTEND_DIST_DIR` 与应用挂载目录是否一致。
+- 生成代码异常：检查 `backend/templates/`，注意 Jinja2 循环内赋值不会自动更新外层变量；用过滤器或 namespace 表达跨循环状态。
+
+## 7. 发布产物
+
+`dist` 为生成物。先配置 `frontend/web/.env.production`，执行类型检查和测试，再构建；当前 `build:prod` 只调用 Vite，不包含类型检查。
 
 ```bash
-pnpm i            # 安装
-pnpm dev          # 开发
-pnpm ts:check     # vue-tsc 类型检查（改完 TS/Vue 必跑）
-pnpm lint         # eslint + prettier + stylelint
-pnpm test         # vitest
-pnpm build        # 构建
+# frontend/web/ 内
+pnpm ts:check
+pnpm test
+pnpm build:prod
+
+# 根目录：按实际部署方式选择一条，不必同时同步两处
+rsync -a --delete frontend/web/dist/ docker/nginx/web/dist/  # Docker /web
+rsync -a --delete frontend/web/dist/ backend/dist/           # 后端静态托管
 ```
 
-`frontend/app` 目录内 `pnpm` 管理自己。
-
-### 首次启动（新人跑通）
-
-1. 复制 `backend/env/.env.example` 为 `.env.dev`，按文件头注释修改必改项（`DATABASE_PASSWORD` / `REDIS_PASSWORD` / `OPENAI_API_KEY`）；`DATABASE_TYPE` 支持 mysql / postgres / sqlite——本地体验用 sqlite 可零配置起跑
-2. `uv sync && uv run main.py run --env=dev`：**启动时自动执行迁移并导入 `sql/*.json` 种子数据**（菜单/角色/用户/字典等），无需手动建表导数；dev 环境检测到模型变更还会自动生成并应用迁移
-3. 前端：`frontend/web` 内 `pnpm install && pnpm dev`（小程序/App H5 调试用 `pnpm dev:h5`）
-4. 默认账号：`super` / `admin` / `user`，密码均为 `123456`（已校验种子 bcrypt 哈希；部署后应立即修改）
-5. 访问地址：Web 前端 `http://localhost:{VITE_PORT}`（`frontend/web/.env` 为 5180）；后端 `http://localhost:8001`、Swagger `http://localhost:8001/docs`、API 前缀 `/api/v1`
-- Docker 一键部署：根目录 `./deploy.sh`（详见 `docker/README.md`）
-
-前端代理：vite 将 `VITE_APP_BASE_API` 前缀代理到 `VITE_API_BASE_URL`（见 `vite.config.ts`），本地开发无 CORS 问题；AI WebSocket 用 `VITE_APP_WS_ENDPOINT` 直连后端（不走代理）。
-
-## 3. 后端约定（backend/app）
-
-- 模块结构：`app/modules/<模块>/<功能>/`，固定文件划分
-  - `controller.py` 路由层、`service.py` 业务层、`crud.py` 数据层、`model.py` ORM、`schema.py` Pydantic
-  - 模块根放 `plugin.toml`（name/title/version/description）
-- 路由统一在 `app/api/v1/routers.py` 注册；路由类用 `OperationLogRoute`（自动操作日志）
-- 权限：`Security(AuthPermission(["模块:资源:操作"]))`，如 `module_ai:chat:query`
-- 响应：`SuccessResponse(data=..., msg=...)` + `response_model=ResponseSchema[T]`；业务错误抛 `CustomException`
-- 基建都在 `app/core/`：`base_crud.py`、`base_model.py`、`base_schema.py`、`redis_crud.py`、`dependencies.py`、`exceptions.py`、`logger.py`（loguru，占位符用 `{}`)
-- 配置：`app/config/setting.py` + `backend/env/.env`（模板见 `env/.env.example`）
-- 改了 model 必须生成并执行 Alembic 迁移；初始菜单/角色等数据在 `backend/sql/*.json`
-- 新模块两种放法：常规业务放 `app/modules/`，可插拔/示例性质放 `app/plugin/`（结构相同，都有 `plugin.toml`）
-- 代码生成：`backend/templates/{python,ts,vue}/*.jinja2` 配合 generator 模块（后台「代码生成」功能可视化生成）；**生成/修改代码后必须重启后端**——dev reload 只在文件变更时重载，动态路由发现（`app/core/discover.py`）只在启动时执行，不重启新模块不生效且会静默失败
-
-## 4. 前端 web 约定（frontend/web/src）
-
-- API 层：`api/module_x/xxx.ts`，对象字面量方法 + `request`（来自 `@utils`），泛型用全局 `ApiResponse<T>` / `PageResult<T>`；URL 与后端 controller 对齐（如 `/system/dict/type/list`）
-- 页面：`views/module_x/...`；页面私有子组件放同目录 `components/` 下，公共组件命名 `FaXxx`
-- CRUD 页面优先复用现成套件：列表用 `useTable` + `FaTable` + `FaSearchBar`，弹窗表单用 `useCrudDialog`/`useCrudForm` + `FaDialog`，列定义用 `useTableColumns`，导入导出用 `useImportExport`——参考已有 `views/module_system/` 页面写法，不要手写 ElTable/ElDialog
-- 权限控制：按钮级用 `v-hasPerm="'sys:user:add'"`（支持数组）；代码内判断用 `useAuth().hasAuth(...)`；后端标识 `模块:资源:操作` 三段式，前后端保持一致
-- i18n：文案用 `$t('key')`，词条加到 `locales/langs/zh.json` 与 `en.json` 两份
-- 自动导入：vue API（`ref`/`computed`/`watch`/`onMounted` 等）无需 import；Element Plus 组件模板内直接用；`ElMessage` 等按现有文件习惯可显式 import
-- 路由：静态壳路由在 `router/routes.ts`；业务路由来自后端菜单（`guards.ts` → `MenuProcessor` → `RouteRegistry` 动态 addRoute）。新增页面要在「菜单管理」配置 route_path/route_name/component_path/keep_alive
-- KeepAlive 与工作栏按「组件名」匹配：`defineOptions({ name })` 必须与菜单的 route_name 一致，否则页面缓存/缓存排除（exclude）会失灵
-- 有副作用页面（WebSocket/定时器/全局事件监听）必须实现 `onActivated`/`onDeactivated`：deactivated 时释放资源，activated 时按需恢复。`onUnmounted` 只在缓存被驱逐时触发，不能作为唯一清理点（详见第 7 节）
-- 路由视图缓存为**单层**：目录路由不挂组件，`KeepAlive` 只存在于 `layouts/fa-page-content/index.vue` 一处，缓存键是叶子路由 `path`（query 变化不重挂载，改键逻辑见同文件 `routeViewCacheKey`）
-- 环境变量：公共 `.env`（`VITE_APP_BASE_API=/api/v1` 请求前缀、`VITE_PORT=5180`）；`.env.development`（`VITE_API_BASE_URL=http://127.0.0.1:8001` 代理目标；AI WebSocket `VITE_APP_WS_ENDPOINT=ws://localhost:8001` 直连）
-- WebSocket 鉴权（AI chat）：token 经 `Sec-WebSocket-Protocol` 传 `["access_token", "access_token." + jwt]`，后端在握手阶段 `websocket_authenticate` 校验
-- 图标：`FaSvgIcon` + iconify（`ri:` / `ep:` / `line-md:`）；i18n 用 `$t(...)`
-
-## 5. 新增一个业务功能（全栈流程）
-
-1. 后端建模块（参考 `app/modules/system/dict/`；标准 CRUD 表可先用后台「代码生成」可视化产出，再调整）
-2. `app/api/v1/routers.py` 注册路由
-3. `uv run main.py revision` + `upgrade` 做迁移；菜单/按钮权限写入 sys_menu（后台「菜单管理」配置 route_path/route_name/component_path/keep_alive/按钮权限）
-4. 前端新建 `api/module_x/xxx.ts` 与 `views/module_x/` 页面（复用 useTable/FaTable 套件）
-5. 前后端权限标识保持一致（`模块:资源:操作`），页面按钮加 `v-hasPerm`
-6. 验证：后端 `uv run pytest`；前端 `pnpm ts:check`、`pnpm lint`、`pnpm test`
-
-## 6. 提交规范
-
-- husky + commitlint + git-cz（`pnpm commit` 交互式生成）；type 用 feat/fix/refactor/chore/docs/test 等
-- lint-staged 会自动格式化暂存文件，不要绕过 hook
-
-## 7. KeepAlive 缓存与连接类资源（踩过坑，勿回退）
-
-- KeepAlive 的 `include` 来自 worktab `opened`（`layouts/fa-page-content/index.vue`），`opened` 为空时 include 为 `undefined`——KeepAlive 对 undefined include **不做 prune**，不要以为「标签清了缓存就没了」
-- KeepAlive 内部缓存无法从外部直接清空，唯一手段是改变 `include`/`exclude` 触发内部 prune。登出场景由 `worktab.store.ts` 的 `clearAll()` 把待删标签组件名写入 `keepAliveExclude` 驱逐旧实例（下次 `openTab` 的 `removeKeepAliveExclude` 自动移出），改 store 时勿删这段
-- WebSocket 守卫必须覆盖握手期：`if (ws && ws.readyState !== WebSocket.CLOSED) return`。只挡 `OPEN` 会在 CONNECTING 期间重入时创建新连接并覆盖旧引用，泄漏的连接照样握手成功并弹提示（AI chat 曾因此登出→登录后出现多条 ws + 多条「连接成功」）
-- 主动断开先摘 `onopen/onmessage/onerror/onclose` 回调再 `close()`，避免关闭竞态触发提示或状态回调
-- 路由出口 KeepAlive **只能有一层**，且不要给它加 `:max`：动态目录路由的 `component` 必须保持 `undefined`（`MenuProcessor.mapMenuNode` / `RouteTransformer.handleNormalRoute`），靠 vue-router 的 RouterView 深度跳级直达叶子页面。历史上给目录挂过壳组件（`NestedRouterParent`），壳实例会随缓存同时存活多份、同一页面被重复挂载，导致切换菜单时接口重复请求；`:max` 的 LRU 则会在标签仍打开时挤掉最早的页面，切回时同样无谓重挂载。缓存集合只由 `include`/`exclude` 表达
-- 排查「重复弹窗/重复连接/重复请求」类 bug 的路径：先 grep 提示文案定位全库唯一来源（N 次弹窗 = N 个实例或 N 次重入）→ 查 KeepAlive include/exclude 计算与登出→登录导航链（登录守卫 404→replace 重定向会叠加竞态窗口）→ 菜单配置查 `backend/sql/sys_menu.json`（确认 route_name 唯一、keep_alive）排除后端
-
-## 8. 已知注意点
-
-- 静态前端托管：`register_frontend`（`app/__init__.py`）检查与挂载必须用同一个 `path_conf.FRONTEND_DIST_DIR`（backend/dist）。曾因检查用 path_conf、挂载硬编码 `frontend/web/dist` 导致 500：`check_dir=False` 时启动不报错，**首次请求才炸**，必须看 loguru 日志（`backend/logs/sopfast.log`）才能定位
-- 模板/脚本里不要用 `{% for %}` + `{% set %}` 累计布尔标志：Jinja2 for 块作用域隔离，循环外读到的仍是初值。用过滤器一次性计算，如 `{% set has_x = columns | selectattr('python_type', 'equalto', 'date') | list | length > 0 %}`（代码生成器 schema.py.jinja2 曾因此漏生成 validator import，生成产物 NameError、后端起不来）
-- 跨端需求（web + 小程序）要同时评估 `frontend/web` 与 `frontend/app` 两套代码，API 层各自维护
-- 小程序侧有自己的 skills（`frontend/app/.agents/skills/`），改小程序 UI 时遵循 wot-ui 约定
-- 文档站改动记得中英两份（`src/guide/` 与 `src/en/guide/`）
-
-## 9. 前端产物验证（dist）
-
-**源码已修 ≠ 部署已修。** dist 是生成物、不入库（`.gitignore`），但仓库内存在多份预构建副本并直接被打进部署，改完前端源码必须重建并同步，否则线上仍跑旧行为（AI chat 重复「连接成功」就因此漏判过一轮：源码 `e39a369b` 已修，三份 dist 仍停在修复前）。
-
-**三份产物与各自的服务入口**
-
-| 产物 | 服务入口 |
-| --- | --- |
-| `frontend/web/dist` | 构建输出（`pnpm build:prod` 的 outDir） |
-| `docker/nginx/web/dist` | docker 部署的 `/web`（`nginx.conf` 的 `alias /usr/share/nginx/html/web/dist`） |
-| `backend/dist` | 一体化部署时 `app.frontend("/")` 托管（`path_conf.FRONTEND_DIST_DIR`） |
-
-移动端同理：`docker/nginx/app/dist/build/h5`（nginx 的 `/app`）。
-
-**重建 + 同步**
-
-```bash
-cd frontend/web && pnpm build:prod          # 输出 frontend/web/dist
-cd ../.. && rsync -a --delete frontend/web/dist/ docker/nginx/web/dist/ \
-              && rsync -a --delete frontend/web/dist/ backend/dist/
-```
-
-必须带 `--delete`：产物文件名带 content hash，不带会把旧 chunk 留在目录里。
-
-**验证要核到产物，不能只看 `src/`**（minify 后函数名/注释会丢，但 `WebSocket.CLOSED` 这类属性访问、以及提示文案字符串会保留）：
-
-```bash
-grep -l "ai/chat/ws" docker/nginx/web/dist/js/*.js                    # 定位 chunk
-grep -oE '.{0,60}readyState.{0,60}' <chunk> | grep -i websocket       # 核守卫（-oE 重复上限 255）
-```
-
-例：旧包 `if (ws?.readyState === WebSocket.OPEN) return;`（`CLOSED` 命中 0 次）；修复后 `if (ws && ws.readyState !== WebSocket.CLOSED) return;`。
-
-**收到「源码没改好」的线上反馈时，第一步先核 dist 产物特征字符串**，再回源码；docker 部署还要重新打镜像/重传 `docker` 目录才算生效。
+同步前确认目标目录；`--delete` 清理该产物目录的旧文件。部署步骤见 `docker/README.md`，`deploy.sh` 不负责构建前端。发布后检查实际访问页面、静态资源、接口和上传资料持久化，分别报告源码验证、构建与部署状态。

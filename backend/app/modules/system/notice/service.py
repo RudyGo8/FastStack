@@ -93,8 +93,9 @@ class NoticeService:
 
         注意：此接口跳过数据权限过滤，所有登录用户都能看到已启用的公告。
         """
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
         from sqlalchemy.orm import selectinload
+
         from app.modules.system.notice.model import NoticeModel
 
         # 直接查询，跳过 CRUDBase 的权限过滤（查询已发布的公告）

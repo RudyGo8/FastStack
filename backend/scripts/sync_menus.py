@@ -1,12 +1,13 @@
 """执行菜单同步脚本。"""
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import asyncio
+import importlib
 import logging
 import pkgutil
-import importlib
 
 logging.disable(logging.CRITICAL)
 
@@ -22,11 +23,12 @@ def import_models():
 async def main():
     import_models()
     from sqlalchemy import text
+
     from app.core.database import async_db_session
     from app.modules.sop.menu_sync import (
-        reconcile_sop_menus,
-        reconcile_ai_menus,
         grant_all_menus_by_role,
+        reconcile_ai_menus,
+        reconcile_sop_menus,
     )
 
     async with async_db_session() as db:

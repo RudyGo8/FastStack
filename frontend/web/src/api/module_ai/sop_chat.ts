@@ -41,8 +41,8 @@ export async function streamChat(
   const headers: Record<string, string> = { "Content-Type": "application/json", Accept: "text/event-stream" };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const base = import.meta.env.VITE_API_BASE_URL || "";
-  const res = await fetch(`${base}/api/v1${API_PATH}/stream`, {
+  const base = import.meta.env.VITE_APP_BASE_API || "/api/v1";
+  const res = await fetch(`${base}${API_PATH}/stream`, {
     method: "POST",
     headers,
     body: JSON.stringify({ message, session_id: sessionId }),
