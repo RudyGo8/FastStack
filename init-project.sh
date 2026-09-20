@@ -23,8 +23,8 @@ rsync -a \
     --exclude 'docker/.env' --exclude 'docker/mysql/data' --exclude 'docker/redis/data' \
     "$SRC/" "$DEST/"
 
-echo "[2/4] 替换标识: 容器名前缀 fva- -> $NAME-, 库名 -> $DB_NAME, 前端标题 -> $NAME ..."
-sed -i "s/fva-/$NAME-/g" "$DEST/docker-compose.yaml"
+echo "[2/4] 替换标识: 容器名前缀 fast- -> $NAME-, 库名 -> $DB_NAME, 前端标题 -> $NAME ..."
+sed -i "s/fast-/$NAME-/g" "$DEST/docker-compose.yaml"
 sed -i "s/MYSQL_DATABASE=faststack/MYSQL_DATABASE=$DB_NAME/" "$DEST/docker-compose.yaml"
 sed -i "s/^DATABASE_NAME = .*/DATABASE_NAME = $DB_NAME/" "$DEST/backend/env/.env.example"
 sed -i "s/^VITE_APP_TITLE = .*/VITE_APP_TITLE = $NAME/" \

@@ -3,7 +3,7 @@ import json
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, Path, Query, Security, WebSocket, WebSocketDisconnect, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from redis.asyncio import Redis
 
 from app.common.response import ResponseSchema, SuccessResponse
@@ -304,3 +304,39 @@ async def websocket_chat_controller(websocket: WebSocket) -> None:
         # 未知异常
         logger.exception("WebSocket未知异常: {}", e)
         await _send_error_and_close(websocket, "服务器内部错误")
+
+
+@ChatRouter.post("/stream", summary="流式问答(SSE)")
+async def chat_sse_stream_controller(
+    auth: Annotated[AuthSchema, Security(AuthPermission(["module_ai:chat:query"]))],
+    redis: Annotated[Redis, Depends(redis_getter)],
+    data: Annotated[AiChatRequestSchema, Body(description="对话请求")],
+) -> StreamingResponse:
+    """标准 SSE 流式聊天端点"""
+    session_id = data.session_id or f"s_{int(asyncio.get_event_loop().time() * 1000)}"
+    service = ChatService(auth)
+    model_config = await get_user_model_config(redis, auth.user.id)
+    query = ChatQuerySchema(message=data.message, session_id=session_id)
+
+    async def event_generator():
+        try:
+            yield f"data: {json.dumps({'type': 'rag_step', 'step': '正在思考中...'}, ensure_ascii=False)}\n\n"
+            async for chunk in service.chat_query(query=query, model_config=model_config):
+                if chunk:
+                    yield f"data: {json.dumps({'type': 'content', 'content': chunk}, ensure_ascii=False)}\n\n"
+            yield f"data: [DONE]\n\n"
+        except Exception as e:
+            logger.exception("SSE 流式生成异常: {}", e)
+            yield f"data: {json.dumps({'type': 'error', 'error': str(e)}, ensure_ascii=False)}\n\n"
+            yield f"data: [DONE]\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream; charset=utf-8",
+        headers={
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
