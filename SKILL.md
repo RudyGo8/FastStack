@@ -72,7 +72,7 @@ pnpm build        # 构建
 ### 首次启动（新人跑通）
 
 1. 复制 `backend/env/.env.example` 为 `.env.dev`，按文件头注释修改必改项（`DATABASE_PASSWORD` / `REDIS_PASSWORD` / `OPENAI_API_KEY`）；`DATABASE_TYPE` 支持 mysql / postgres / sqlite——本地体验用 sqlite 可零配置起跑
-2. `uv sync && uv run main.py run --env=dev`：**启动时自动执行迁移并导入 `sql/*.json` 种子数据**（菜单/角色/用户/字典等），无需手动建表导数；dev 环境检测到模型变更还会自动生成并应用迁移
+2. `uv sync --extra mysql && uv run main.py run --env=dev`（数据库驱动已拆为可选 extra，不带 `--extra` 会缺驱动）：**启动时自动执行迁移并导入 `sql/*.json` 种子数据**（菜单/角色/用户/字典等），无需手动建表导数；dev 环境检测到模型变更还会自动生成并应用迁移
 3. 前端：`frontend/web` 内 `pnpm install && pnpm dev`（小程序/App H5 调试用 `pnpm dev:h5`）
 4. 默认账号：`super` / `admin` / `user`，密码均为 `123456`（已校验种子 bcrypt 哈希；部署后应立即修改）
 5. 访问地址：Web 前端 `http://localhost:{VITE_PORT}`（`frontend/web/.env` 为 5180）；后端 `http://localhost:8001`、Swagger `http://localhost:8001/docs`、API 前缀 `/api/v1`

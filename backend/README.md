@@ -74,7 +74,7 @@ modules/<模块>/<子域>/
 ### 第一次在本机跑起来
 
 1. 复制 `env/.env.example` → `env/.env.dev`，填写数据库、Redis 等（先在 DB 中建好空库）。
-2. 在 **`backend/` 目录下** 安装依赖：推荐 **`uv sync`**；或 `pip install -r requirements.txt`。
+2. 在 **`backend/` 目录下** 安装依赖：推荐 **`uv sync --extra mysql`**（数据库驱动已拆为 `--extra mysql` / `postgres` / `sqlite`，`--extra all-db` 全装）；或 `pip install -r requirements.txt`。
 3. **启动**：`uv run main.py run --env=dev`（或 `python main.py run --env=dev`）。**首次启动会自动初始化数据库表与基础数据**，一般**无需**先执行 `upgrade`。接口文档示例：`http://127.0.0.1:8001/docs`（端口见 `.env.dev` 中 `SERVER_PORT`）。
 
 ### 数据库迁移命令（模型变更时使用）
@@ -96,7 +96,7 @@ uv run main.py upgrade --env=dev
 
 ```bash
 # 推荐使用 uv（与 pyproject.toml 一致）
-uv sync
+uv sync --extra mysql
 uv run main.py run --env=dev
 
 # 或使用传统 pip / venv

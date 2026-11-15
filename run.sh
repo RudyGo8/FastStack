@@ -35,7 +35,7 @@ for _ in $(seq 1 60); do
 done
 
 echo "[2/3] 启动后端 (端口8001, dev 自动热重载)..."
-(cd backend && uv sync --quiet) || exit 1
+(cd backend && uv sync --extra mysql --quiet) || exit 1
 uv run --directory backend main.py run --env=dev &
 BACK_PID=$!
 

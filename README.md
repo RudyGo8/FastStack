@@ -17,7 +17,7 @@
 
 # 也可以分别启动
 docker compose up -d
-cd backend && uv sync && uv run main.py run --env=dev
+cd backend && uv sync --extra mysql && uv run main.py run --env=dev
 cd ../frontend/web && pnpm install && pnpm run dev
 ```
 
