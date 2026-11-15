@@ -2,7 +2,7 @@ import asyncio
 import json
 from typing import Any
 
-from sqlalchemy import func, inspect, select
+from sqlalchemy import func, inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.enums import EnvironmentEnum
@@ -59,8 +59,25 @@ class InitializeData:
         (STATIC_DIR / "upload").mkdir(parents=True, exist_ok=True)
 
     @staticmethod
+    async def __ensure_pgvector() -> None:
+        """显式启用 pgvector 扩展（仅 postgres + VECTOR_STORE_ENABLE）。
+
+        未开启向量检索时完全不触碰数据库，保证普通项目不需要预装 pgvector。
+        """
+        if settings.DATABASE_TYPE != "postgres" or not settings.VECTOR_STORE_ENABLE:
+            return
+        async with async_engine.begin() as conn:
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            ext_version = (
+                await conn.execute(text("SELECT extversion FROM pg_extension WHERE extname = 'vector'"))
+            ).scalar()
+        logger.info(f"✅ pgvector 扩展就绪（版本 {ext_version}）")
+
+    @staticmethod
     async def __apply_migrations() -> None:
         """将数据库 schema 带到模型定义的最新的版本（开源项目要求任意方言开箱即用）。"""
+        await InitializeData.__ensure_pgvector()
+
         from alembic import command
         from alembic.config import Config
 

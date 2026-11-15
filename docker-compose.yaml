@@ -1,12 +1,58 @@
 # ============================================
-# FastStack 开发环境基础设施（MySQL / Redis / Milvus 全家桶）
+# FastStack 开发环境基础设施
 # 使用方式: 在仓库根目录执行 docker compose up -d
+#   默认只启动 PostgreSQL(+pgvector) / Redis
+#   按需启用其它服务: docker compose --profile milvus up -d
 # 生产全栈部署用 docker/docker-compose.yaml + ./deploy.sh
 # 注意: 容器名与端口和 fast-* 栈一致，别处再跑同名栈会冲突
 # ============================================
 
 services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    container_name: fast-postgres
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=123456
+      - POSTGRES_DB=faststack
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - "${DOCKER_VOLUME_DIRECTORY:-./volumes}/postgres:/var/lib/postgresql"
+    networks:
+      - fast-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  redis:
+    image: redis:7-alpine
+    container_name: fast-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - "${DOCKER_VOLUME_DIRECTORY:-./volumes}/redis:/data"
+    networks:
+      - fast-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ── 以下均不再随默认栈启动，按需 --profile 启用 ──
+
+  # MySQL 兼容栈：仅保留旧项目/迁移演练时使用
   mysql:
+    profiles: ["mysql"]
     image: mysql:8.0
     container_name: fast-mysql
     restart: unless-stopped
@@ -31,25 +77,9 @@ services:
       retries: 10
       start_period: 30s
 
-  redis:
-    image: redis:7-alpine
-    container_name: fast-redis
-    restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6380:6379"
-    volumes:
-      - "${DOCKER_VOLUME_DIRECTORY:-./volumes}/redis:/data"
-    networks:
-      - fast-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 20s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-
+  # Milvus 全家桶：默认向量方案已改为 pgvector，仅供仍需 Milvus 的项目启用
   etcd:
+    profiles: ["milvus"]
     container_name: fast-etcd
     image: quay.io/coreos/etcd:v3.5.18
     environment:
@@ -69,6 +99,7 @@ services:
       retries: 3
 
   minio:
+    profiles: ["milvus"]
     container_name: fast-minio
     image: minio/minio:RELEASE.2024-05-28T17-19-04Z
     environment:
@@ -86,6 +117,7 @@ services:
       retries: 3
 
   milvus:
+    profiles: ["milvus"]
     container_name: fast-milvus
     image: milvusdb/milvus:v2.5.14
     command: ["milvus", "run", "standalone"]
@@ -113,6 +145,7 @@ services:
       retries: 3
 
   attu:
+    profiles: ["milvus"]
     container_name: fast-attu
     image: zilliz/attu:v2.5.11
     environment:

@@ -97,13 +97,16 @@ class Settings(BaseSettings):
     AUTOFETCH: bool | None = None  # AUTOFLUSH 别名（优先级高于 AUTOFLUSH，兼容旧环境变量名）
     EXPIRE_ON_COMMIT: bool = False  # 是否在提交时过期
 
-    # MySQL/PostgreSQL数据库连接
-    DATABASE_TYPE: Literal["mysql", "postgres", "sqlite"] = "mysql"
+    # PostgreSQL/MySQL数据库连接（PostgreSQL 为默认；MySQL 保留兼容，仅在显式选择时启用）
+    DATABASE_TYPE: Literal["mysql", "postgres", "sqlite"] = "postgres"
     DATABASE_HOST: str = "localhost"
-    DATABASE_PORT: int = 3306
-    DATABASE_USER: str = "root"
+    DATABASE_PORT: int = 5432
+    DATABASE_USER: str = "postgres"
     DATABASE_PASSWORD: str = ""
     DATABASE_NAME: str = "faststack"
+
+    # 向量检索：仅选择 postgres 时可用，关闭时不建表、不依赖 pgvector 扩展
+    VECTOR_STORE_ENABLE: bool = False
 
     # ================================================= #
     # ******************** Redis配置 ******************* #

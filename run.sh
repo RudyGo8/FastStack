@@ -21,23 +21,23 @@ echo "============================================"
 [ -f .env ] || cp .env.example .env
 [ -f backend/env/.env.dev ] || {
     cp backend/env/.env.example backend/env/.env.dev
-    sed -i "s|^DATABASE_PORT = .*|DATABASE_PORT = 3307|; s|^DATABASE_PASSWORD = .*|DATABASE_PASSWORD = 123456|; s|^REDIS_PORT = .*|REDIS_PORT = 6380|; s|^REDIS_PASSWORD = .*|REDIS_PASSWORD = ''|; s|^SECRET_KEY = .*|SECRET_KEY = $(openssl rand -hex 32)|" backend/env/.env.dev
-    echo "已生成 backend/env/.env.dev（MySQL 3307/123456，Redis 6380 无密码，对齐 docker-compose.yaml）"
+    sed -i "s|^DATABASE_TYPE = .*|DATABASE_TYPE = postgres|; s|^DATABASE_HOST = .*|DATABASE_HOST = 127.0.0.1|; s|^DATABASE_PORT = .*|DATABASE_PORT = 5434|; s|^DATABASE_USER = .*|DATABASE_USER = postgres|; s|^DATABASE_PASSWORD = .*|DATABASE_PASSWORD = 123456|; s|^REDIS_PORT = .*|REDIS_PORT = 6380|; s|^REDIS_PASSWORD = .*|REDIS_PASSWORD = ''|; s|^SECRET_KEY = .*|SECRET_KEY = $(openssl rand -hex 32)|" backend/env/.env.dev
+    echo "已生成 backend/env/.env.dev（PostgreSQL 5434/123456，Redis 6380 无密码，对齐 docker-compose.yaml）"
 }
 [ -f frontend/web/.env ] || cp frontend/web/.env.example frontend/web/.env
 [ -f frontend/web/.env.development ] || cp frontend/web/.env.development.example frontend/web/.env.development
 
-echo "[1/3] 启动基础设施 (MySQL:3307 / Redis:6380 / Milvus:19531)..."
+echo "[1/3] 启动基础设施 (PostgreSQL:5434 / Redis:6380)..."
 docker compose up -d || exit 1
 
-echo "等待 MySQL 就绪（首次初始化约 30s）..."
+echo "等待 PostgreSQL 就绪（首次初始化约 30s）..."
 for _ in $(seq 1 60); do
-    [ "$(docker compose ps mysql --format '{{.Health}}' 2>/dev/null)" = healthy ] && break
+    [ "$(docker compose ps postgres --format '{{.Health}}' 2>/dev/null)" = healthy ] && break
     sleep 1
 done
 
 echo "[2/3] 启动后端 (端口8001, dev 自动热重载)..."
-(cd backend && uv sync --extra mysql --quiet) || exit 1
+(cd backend && uv sync --extra postgres --quiet) || exit 1
 uv run --directory backend main.py run --env=dev &
 BACK_PID=$!
 
@@ -48,6 +48,7 @@ FRONT_PID=$!
 
 trap 'kill $BACK_PID $FRONT_PID 2>/dev/null' EXIT
 echo ""
-echo "全部已启动: 后端 http://127.0.0.1:8001/docs | 前端 http://127.0.0.1:5180 (admin/123456) | Attu http://localhost:8082"
+echo "全部已启动: 后端 http://127.0.0.1:8001/docs | 前端 http://127.0.0.1:5180 (admin/123456)"
+echo "启用 Milvus 全家桶: docker compose --profile milvus up -d"
 echo "Ctrl+C 停止前后端 | ./stop.sh 停止全部（含 docker 基础设施）"
 wait
