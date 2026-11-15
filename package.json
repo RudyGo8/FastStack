@@ -1,0 +1,12 @@
+{
+  "name": "faststack",
+  "private": true,
+  "description": "仓库级工具链：husky + lint-staged（版本号见根目录 VERSION）",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2"
+  }
+}

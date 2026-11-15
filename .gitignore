@@ -13,7 +13,7 @@ __pycache__
 *.egg
 *.egg-info
 dist
-build
+/build
 eggs
 .eggs
 *.manifest
@@ -69,8 +69,6 @@ frontend/web/test-results/
 !frontend/app/.gitkeep
 
 .plan
-CLAUDE.md
-AGENTS.md
 .codebuddy
 .agent
 .workbuddy

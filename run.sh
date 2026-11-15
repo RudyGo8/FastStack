@@ -18,11 +18,13 @@ echo "  FastStack 一键启动 (dev)"
 echo "============================================"
 
 # ── 0. 首次运行生成开发配置 ──
+[ -f .env ] || cp .env.example .env
 [ -f backend/env/.env.dev ] || {
     cp backend/env/.env.example backend/env/.env.dev
     sed -i "s|^DATABASE_PORT = .*|DATABASE_PORT = 3307|; s|^DATABASE_PASSWORD = .*|DATABASE_PASSWORD = 123456|; s|^REDIS_PORT = .*|REDIS_PORT = 6380|; s|^REDIS_PASSWORD = .*|REDIS_PASSWORD = ''|; s|^SECRET_KEY = .*|SECRET_KEY = $(openssl rand -hex 32)|" backend/env/.env.dev
     echo "已生成 backend/env/.env.dev（MySQL 3307/123456，Redis 6380 无密码，对齐 docker-compose.yaml）"
 }
+[ -f frontend/web/.env ] || cp frontend/web/.env.example frontend/web/.env
 [ -f frontend/web/.env.development ] || cp frontend/web/.env.development.example frontend/web/.env.development
 
 echo "[1/3] 启动基础设施 (MySQL:3307 / Redis:6380 / Milvus:19531)..."
@@ -47,6 +49,5 @@ FRONT_PID=$!
 trap 'kill $BACK_PID $FRONT_PID 2>/dev/null' EXIT
 echo ""
 echo "全部已启动: 后端 http://127.0.0.1:8001/docs | 前端 http://127.0.0.1:5180 (admin/123456) | Attu http://localhost:8082"
-echo "停止基础设施: docker compose stop"
-echo "Ctrl+C 停止前后端"
+echo "Ctrl+C 停止前后端 | ./stop.sh 停止全部（含 docker 基础设施）"
 wait

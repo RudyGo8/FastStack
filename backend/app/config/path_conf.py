@@ -27,6 +27,9 @@ FRONTEND_DIST_DIR: Path = BASE_DIR / "dist"
 # banner.txt 文件路径
 BANNER_FILE = BASE_DIR / "banner.txt"
 
+# 项目版本号唯一来源（仓库根目录 VERSION）
+VERSION_FILE = BASE_DIR.parent / "VERSION"
+
 # IP 归属地离线库（ip2region xdb）
 IP2REGION_DIR = BASE_DIR / "data" / "ip2region"
 IP2REGION_XDB_V4 = IP2REGION_DIR / "ip2region_v4.xdb"

@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
 import autoprefixer from "autoprefixer";
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "url";
 import vueDevTools from "vite-plugin-vue-devtools";
 import viteCompression from "vite-plugin-compression";
@@ -13,9 +14,12 @@ import tailwindcss from "@tailwindcss/vite";
 import vitePluginStart from "./build/vitePluginStart";
 import Icons from "unplugin-icons/vite";
 import IconsResolver from "unplugin-icons/resolver";
-import { name, version, engines, dependencies, devDependencies } from "./package.json";
+import { name, engines, dependencies, devDependencies } from "./package.json";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// 版本号唯一来源：仓库根目录 VERSION（勿在 package.json / .env 重复硬编码）
+const version = readFileSync(path.resolve(__dirname, "../../VERSION"), "utf-8").trim();
 
 const __APP_INFO__ = {
   pkg: { name, version, engines, dependencies, devDependencies },
@@ -160,7 +164,7 @@ export default ({ mode }: { mode: string }) => {
     },
     plugins: [
       vue(),
-      vitePluginStart(),
+      vitePluginStart(version),
       tailwindcss(),
       // API 自动导入
       AutoImport({

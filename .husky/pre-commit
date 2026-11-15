@@ -1,0 +1,11 @@
+#!/bin/sh
+# 仅对本次 git commit 暂存的文件执行格式化与 lint，禁止全仓格式化。
+# 每个前端工程跑自己的 lint-staged 配置；未安装依赖的工程自动跳过。
+set -e
+root=$(git rev-parse --show-toplevel)
+
+for pkg in frontend/web frontend/app; do
+    bin="$root/$pkg/node_modules/.bin/lint-staged"
+    [ -x "$bin" ] || continue
+    (cd "$root/$pkg" && "$bin" --allow-empty)
+done

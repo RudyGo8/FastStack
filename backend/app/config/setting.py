@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.common.enums import EnvironmentEnum
 from app.config.db_url import build_redis_url, build_sqlalchemy_url
-from app.config.path_conf import ENV_DIR
+from app.config.path_conf import ENV_DIR, VERSION_FILE
 
 
 class Settings(BaseSettings):
@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     # ================================================= #
     DEBUG: bool = True  # 调试模式
     TITLE: str = " FastStack 🎉 "  # 文档标题
-    VERSION: str = "3.0.0"  # 版本号
+    VERSION: str = VERSION_FILE.read_text(encoding="utf-8").strip() if VERSION_FILE.exists() else "0.0.0"  # 读仓库根 VERSION，勿在 .env 重复定义
     DESCRIPTION: str = "一个基于fastapi、sqlalchemy、redis实现的轻量化框架"  # 文档描述
     SUMMARY: str = "接口汇总"  # 文档概述
     DOCS_URL: str = "/docs"  # Swagger UI路径

@@ -1,7 +1,7 @@
 {
   "name": "fastapp",
   "type": "module",
-  "version": "3.1.0",
+  "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@9.9.0",
   "license": "MIT",
@@ -50,7 +50,7 @@
     "type-check": "vue-tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "prepare": "cd ../.. && husky install frontend/app/.husky",
+    "prepare": "cd ../.. && husky",
     "commit": "git-cz",
     "release-major": "npm version major",
     "release-minor": "npm version minor",
@@ -123,7 +123,7 @@
     "cz-conventional-changelog": "^3.3.0",
     "eslint": "^9.39.1",
     "git-cz": "^4.9.0",
-    "husky": "^8.0.3",
+    "husky": "^9.1.7",
     "lint-staged": "^15.2.9",
     "miniprogram-api-typings": "^3.12.3",
     "sass": "^1.99.0",
@@ -147,6 +147,6 @@
     }
   },
   "lint-staged": {
-    "*": "eslint --fix"
+    "*.{js,ts,vue}": "eslint --fix"
   }
 }

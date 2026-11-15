@@ -1,7 +1,7 @@
 {
   "name": "faststack",
   "description": "Vue3 + Vite + TypeScript + Element-Plus 的后台管理模板",
-  "version": "3.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -18,7 +18,7 @@
     "ts:check": "pnpm vue-tsc --noEmit --skipLibCheck",
     "npm:check": "pnpx npm-check-updates -u",
     "clean:cache": "pnpx rimraf node_modules/.cache node_modules/.vite",
-    "prepare": "husky",
+    "prepare": "cd ../.. && husky",
     "icon": "esno ./scripts/icon.ts",
     "preview": "vite preview",
     "type-check": "vue-tsc --noEmit",
@@ -28,7 +28,6 @@
     "lint:eslint": "eslint --cache \"src/**/*.{vue,ts,js}\" --fix",
     "lint:prettier": "prettier --write \"**/*.{js,cjs,ts,json,tsx,css,less,scss,vue,html,md}\"",
     "lint:stylelint": "stylelint \"**/*.{css,scss,vue}\" --cache --fix",
-    "lint:lint-staged": "lint-staged -c ./.husky/lintstagedrc.cjs",
     "commit": "git-cz",
     "clean:dev": "tsx scripts/clean-dev.ts"
   },
