@@ -45,12 +45,12 @@ const AuthAPI = {
     });
   },
 
-  /** 滑块验证完成后端标记 */
-  sliderComplete(captchaKey: string) {
+  /** 拼图滑块释放后交由后端校验位置 */
+  sliderComplete(captchaKey: string, position?: number) {
     return request<ApiResponse<{ captcha_key: string; verified: boolean }>>({
       url: `${API_PATH}/captcha/slider/complete`,
       method: "post",
-      data: { captcha_key: captchaKey },
+      data: { captcha_key: captchaKey, position },
     });
   },
 };
@@ -85,4 +85,10 @@ export interface CaptchaInfo {
   enable: boolean;
   key: string;
   img_base: string;
+  piece_base: string;
+  piece_y: number;
+  piece_width: number;
+  piece_height: number;
+  bg_width: number;
+  bg_height: number;
 }

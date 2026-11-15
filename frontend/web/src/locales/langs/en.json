@@ -54,6 +54,7 @@
     "tips": "Prompt",
     "cancel": "Cancel",
     "confirm": "Confirm",
+    "closeAction": "Close",
     "logoutTips": "Do you want to log out?",
     "reset": "Reset",
     "save": "Save",
@@ -126,20 +127,11 @@
   "setting": {
     "menuType": {
       "title": "Menu Layout",
-      "list": [
-        "Vertical",
-        "Horizontal",
-        "Mixed",
-        "Dual"
-      ]
+      "list": ["Vertical", "Horizontal", "Mixed", "Dual"]
     },
     "theme": {
       "title": "Theme Style",
-      "list": [
-        "Light",
-        "Dark",
-        "System"
-      ]
+      "list": ["Light", "Dark", "System"]
     },
     "menu": {
       "title": "Menu Style"
@@ -149,17 +141,11 @@
     },
     "box": {
       "title": "Box Style",
-      "list": [
-        "Border",
-        "Shadow"
-      ]
+      "list": ["Border", "Shadow"]
     },
     "container": {
       "title": "Container Width",
-      "list": [
-        "Full",
-        "Boxed"
-      ]
+      "list": ["Full", "Boxed"]
     },
     "basics": {
       "title": "Basic Config",
@@ -213,20 +199,11 @@
   "settings": {
     "menuType": {
       "title": "Menu Layout",
-      "list": [
-        "Vertical",
-        "Horizontal",
-        "Mixed",
-        "Dual"
-      ]
+      "list": ["Vertical", "Horizontal", "Mixed", "Dual"]
     },
     "theme": {
       "title": "Theme Style",
-      "list": [
-        "Light",
-        "Dark",
-        "System"
-      ]
+      "list": ["Light", "Dark", "System"]
     },
     "menu": {
       "title": "Menu Style"
@@ -236,17 +213,11 @@
     },
     "box": {
       "title": "Box Style",
-      "list": [
-        "Border",
-        "Shadow"
-      ]
+      "list": ["Border", "Shadow"]
     },
     "container": {
       "title": "Container Width",
-      "list": [
-        "Full",
-        "Boxed"
-      ]
+      "list": ["Full", "Boxed"]
     },
     "basics": {
       "title": "Basic Config",
@@ -339,15 +310,9 @@
   "notice": {
     "title": "Notice",
     "btnRead": "Mark as read",
-    "bar": [
-      "Notice",
-      "Message",
-      "Todo"
-    ],
+    "bar": ["Notice", "Message", "Todo"],
     "empty": "No notifications",
-    "text": [
-      "No"
-    ],
+    "text": ["No"],
     "viewAll": "View all"
   },
   "worktab": {
@@ -416,6 +381,9 @@
     },
     "sliderText": "Please slide to verify",
     "sliderSuccessText": "Verification successful",
+    "puzzleText": "Hold and drag the slider to finish the puzzle",
+    "puzzleTitle": "Drag the slider until the piece lines up with the gap",
+    "puzzleEntry": "Click to complete the puzzle",
     "rememberPwd": "Remember password",
     "forgetPwd": "Forgot password",
     "btnText": "Login",
