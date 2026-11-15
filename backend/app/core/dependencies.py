@@ -94,32 +94,32 @@ async def _authenticate(
 ) -> AuthSchema:
     """核心认证逻辑（HTTP 与 WebSocket 共享）"""
     if not token:
-        raise CustomException(msg="认证已失效", code=RET.UNAUTHORIZED.code, status_code=401)
+        raise CustomException(msg="认证已失效", code=RET.UNAUTHORIZED.code)
 
     # 处理Bearer token（兼容无空格/无前缀输入，避免 IndexError）
     if token.startswith("Bearer"):
         token = token[len("Bearer") :].strip()
         if not token:
-            raise CustomException(msg="认证已失效", code=RET.UNAUTHORIZED.code, status_code=401)
+            raise CustomException(msg="认证已失效", code=RET.UNAUTHORIZED.code)
 
     # 滑动模式下跳过 JWT exp 校验，由 Redis session TTL 决定实际有效期
     payload = decode_access_token(token, verify_exp=not settings.TOKEN_SLIDING_EXPIRE)
     if not payload or payload.is_refresh:
-        raise CustomException(msg="非法凭证", code=RET.INVALID_CREDENTIALS.code, status_code=401)
+        raise CustomException(msg="非法凭证", code=RET.INVALID_CREDENTIALS.code)
 
     session_id = payload.sub
     if not session_id:
-        raise CustomException(msg="认证已失效", code=RET.UNAUTHORIZED.code, status_code=401)
+        raise CustomException(msg="认证已失效", code=RET.UNAUTHORIZED.code)
 
     session_key = f"{RedisInitKeyConfig.USER_SESSION.key}:{session_id}"
     raw = await RedisCURD(redis).get(session_key)
     if not raw:
-        raise CustomException(msg="认证已失效", code=RET.UNAUTHORIZED.code, status_code=401)
+        raise CustomException(msg="认证已失效", code=RET.UNAUTHORIZED.code)
     user_info = json.loads(raw)
 
     # 校验 session 数据完整性
     if not user_info.get("session_id"):
-        raise CustomException(msg="认证已失效", code=RET.UNAUTHORIZED.code, status_code=401)
+        raise CustomException(msg="认证已失效", code=RET.UNAUTHORIZED.code)
 
     # 滑动过期续期：以 USER_SESSION 为存活判据与续期主体，且受绝对上限约束
     if settings.TOKEN_SLIDING_EXPIRE:
@@ -147,7 +147,7 @@ async def _authenticate(
                 )
             if expired:
                 await crud.delete(session_key)
-                raise CustomException(msg="会话超过最大存活时长，请重新登录", code=RET.UNAUTHORIZED.code, status_code=401)
+                raise CustomException(msg="会话超过最大存活时长，请重新登录", code=RET.UNAUTHORIZED.code)
             # 续期必须落在存活判据（USER_SESSION）上，否则续期无效、判据形同虚设
             await crud.expire(key=session_key, expire=settings.REFRESH_TOKEN_EXPIRE_SECONDS)
             await crud.expire(
@@ -157,16 +157,16 @@ async def _authenticate(
 
     username = user_info.get("user_name")
     if not username:
-        raise CustomException(msg="认证已失效", code=RET.UNAUTHORIZED.code, status_code=401)
+        raise CustomException(msg="认证已失效", code=RET.UNAUTHORIZED.code)
 
     user_status = user_info.get("user_status", 0)
     user_id = user_info.get("user_id")
 
     if user_status == 1:
-        raise CustomException(msg="用户已被停用", code=RET.UNAUTHORIZED.code, status_code=401)
+        raise CustomException(msg="用户已被停用", code=RET.UNAUTHORIZED.code)
 
     if not user_id:
-        raise CustomException(msg="认证已失效", code=RET.UNAUTHORIZED.code, status_code=401)
+        raise CustomException(msg="认证已失效", code=RET.UNAUTHORIZED.code)
 
     # 每请求查库校验用户仍存在且未删除：token 只证明签发时身份，不证明现在。
     from app.modules.system.user.model import UserModel  # 延迟导入：core 导入期不依赖业务层（守卫不变式 3）
@@ -179,7 +179,7 @@ async def _authenticate(
         .first()
     )
     if not user_obj:
-        raise CustomException(msg="用户不存在", code=RET.NOT_FOUND.code, status_code=401)
+        raise CustomException(msg="用户不存在", code=RET.UNAUTHORIZED.code)
 
     user = CoreUserSchema.model_validate(user_obj)
     return AuthSchema(
@@ -225,10 +225,10 @@ class AuthPermission:
         user_permissions = set[Any](auth.permissions)
 
         if not user_permissions:
-            raise CustomException(msg="无权限操作", code=RET.FORBIDDEN.code, status_code=403)
+            raise CustomException(msg="无权限操作", code=RET.FORBIDDEN.code)
 
         if not any(perm in user_permissions for perm in self.permissions):
             logger.error(f"用户缺少任何所需的权限: {self.permissions}")
-            raise CustomException(msg="无权限操作", code=RET.NO_PERMISSION.code, status_code=403)
+            raise CustomException(msg="无权限操作", code=RET.NO_PERMISSION.code)
 
         return auth

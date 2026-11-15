@@ -1,5 +1,6 @@
 import re
-from datetime import date, datetime, time
+from datetime import UTC, date, datetime, time
+from zoneinfo import ZoneInfo
 from typing import Annotated, Any
 
 from pydantic import AfterValidator, PlainSerializer, WithJsonSchema
@@ -8,14 +9,30 @@ from app.common.constant import DATE_DISPLAY_FMT, DATETIME_DISPLAY_FMT, TIME_DIS
 from app.common.enums import RET
 from app.config.setting import settings
 from app.core.exceptions import CustomException
+from app.core.logger import logger
 from app.utils.password_util import PwdUtil
 
 # 自定义日期时间字符串类型
+def to_local_datetime(value: datetime | None) -> datetime | None:
+    """把数据库中的 UTC/naive 时间转为对外展示时区。"""
+    if not isinstance(value, datetime):
+        return value
+    dt = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    try:
+        return dt.astimezone(ZoneInfo(settings.TIMEZONE))
+    except Exception:
+        return dt
+
+
 DateTimeStr = Annotated[
     datetime,
     AfterValidator(lambda x: datetime_validator(x)),
     PlainSerializer(
-        lambda x: x.strftime(DATETIME_DISPLAY_FMT) if isinstance(x, datetime) else str(x),
+        lambda x: (
+            to_local_datetime(x).strftime(DATETIME_DISPLAY_FMT)
+            if isinstance(x, datetime) and to_local_datetime(x) is not None
+            else str(x)
+        ),
         return_type=str,
         when_used="json",
     ),
@@ -80,8 +97,11 @@ def datetime_validator(value: str | datetime) -> datetime:
             return datetime.strptime(value, DATETIME_DISPLAY_FMT)
         if isinstance(value, datetime):
             return value
-    except Exception:
-        raise CustomException(code=RET.ERROR.code, msg="无效的日期格式")
+    except CustomException:
+        raise
+    except Exception as e:
+        logger.exception("日期时间格式校验失败")
+        raise CustomException(code=RET.ERROR.code, msg="无效的日期格式") from e
 
 
 def date_validator(value: str | date) -> date:
@@ -101,8 +121,11 @@ def date_validator(value: str | date) -> date:
             return datetime.strptime(value, DATE_DISPLAY_FMT).date()
         if isinstance(value, date):
             return value
-    except Exception:
-        raise CustomException(code=RET.ERROR.code, msg="无效的日期格式")
+    except CustomException:
+        raise
+    except Exception as e:
+        logger.exception("日期格式校验失败")
+        raise CustomException(code=RET.ERROR.code, msg="无效的日期格式") from e
 
 
 def time_validator(value: str | time) -> time:
@@ -122,8 +145,11 @@ def time_validator(value: str | time) -> time:
             return datetime.strptime(value, TIME_DISPLAY_FMT).time()
         if isinstance(value, time):
             return value
-    except Exception:
-        raise CustomException(code=RET.ERROR.code, msg="无效的时间格式")
+    except CustomException:
+        raise
+    except Exception as e:
+        logger.exception("时间格式校验失败")
+        raise CustomException(code=RET.ERROR.code, msg="无效的时间格式") from e
 
 
 def email_validator(value: str) -> str:

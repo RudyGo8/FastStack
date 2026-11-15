@@ -67,7 +67,7 @@ async def _http_json(method: str, url: str, **kwargs: Any) -> dict:
             return r.json()
         except json.JSONDecodeError:
             logger.error(f"微信 API 非 JSON 响应: {r.text[:500]}")
-            raise CustomException(msg="微信接口返回异常")
+            raise
 
 
 async def _get_access_token(redis: Redis) -> str:

@@ -47,7 +47,7 @@ class CustomOAuth2PasswordBearer(OAuth2PasswordBearer):
 
         if not authorization or scheme.lower() != settings.TOKEN_TYPE.lower():
             if self.auto_error:
-                raise CustomException(msg="认证失败,请登录后再试", code=RET.TOKEN_EXPIRED.code, status_code=401)
+                raise CustomException(msg="认证失败,请登录后再试", code=RET.TOKEN_EXPIRED.code)
             return None
         return token
 
@@ -130,7 +130,7 @@ def decode_access_token(token: str, verify_exp: bool = True) -> JWTPayloadSchema
     - CustomException: 解析失败时抛出,状态码为401。
     """
     if not token:
-        raise CustomException(msg="认证不存在,请重新登录", code=RET.TOKEN_EXPIRED.code, status_code=401)
+        raise CustomException(msg="认证不存在,请重新登录", code=RET.TOKEN_EXPIRED.code)
 
     try:
         options: dict = {}
@@ -140,15 +140,15 @@ def decode_access_token(token: str, verify_exp: bool = True) -> JWTPayloadSchema
 
         online_user_info = payload.get("sub")
         if not online_user_info:
-            raise CustomException(msg="无效认证,请重新登录", code=RET.TOKEN_EXPIRED.code, status_code=401)
+            raise CustomException(msg="无效认证,请重新登录", code=RET.TOKEN_EXPIRED.code)
 
         return JWTPayloadSchema(**payload)
 
     except (jwt.InvalidSignatureError, jwt.DecodeError):
-        raise CustomException(msg="无效认证,请重新登录", code=RET.TOKEN_EXPIRED.code, status_code=401)
+        raise CustomException(msg="无效认证,请重新登录", code=RET.TOKEN_EXPIRED.code)
 
     except jwt.ExpiredSignatureError:
-        raise CustomException(msg="认证已过期,请重新登录", code=RET.TOKEN_EXPIRED.code, status_code=401)
+        raise CustomException(msg="认证已过期,请重新登录", code=RET.TOKEN_EXPIRED.code)
 
     except jwt.InvalidTokenError:
-        raise CustomException(msg="token已失效,请重新登录", code=RET.TOKEN_EXPIRED.code, status_code=401)
+        raise CustomException(msg="token已失效,请重新登录", code=RET.TOKEN_EXPIRED.code)

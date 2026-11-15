@@ -1,9 +1,6 @@
-from typing import Any
+from __future__ import annotations
 
-import boto3
-from boto3.s3.transfer import TransferConfig
-from botocore.config import Config
-from botocore.exceptions import ClientError
+from typing import TYPE_CHECKING, Any
 
 from app.core.exceptions import CustomException
 from app.core.logger import logger
@@ -15,6 +12,19 @@ from app.modules.task.storage.core.base import (
     StorageProtocol,
     normalize_endpoint,
 )
+from app.utils.lazy_sdk import lazy_module
+
+if TYPE_CHECKING:
+    import boto3
+    import boto3.s3.transfer as boto_transfer
+    import botocore.config as botocore_config
+    import botocore.exceptions as botocore_exceptions
+else:
+    # 冷启动不拉 SDK：只在真正使用 S3 协议时才导入（见 app/utils/lazy_sdk.py）
+    boto3 = lazy_module("boto3")
+    boto_transfer = lazy_module("boto3.s3.transfer")
+    botocore_config = lazy_module("botocore.config")
+    botocore_exceptions = lazy_module("botocore.exceptions")
 
 
 class S3StorageAdapter(BaseStorageAdapter):
@@ -38,7 +48,7 @@ class S3StorageAdapter(BaseStorageAdapter):
             s3_options["use_accelerate_endpoint"] = True
         if adv.us_east_1_regional_endpoint:
             s3_options["us_east_1_regional_endpoint"] = adv.us_east_1_regional_endpoint
-        config = Config(
+        config = botocore_config.Config(
             signature_version=adv.signature_version,
             retries={"max_attempts": adv.max_attempts, "mode": adv.retries_mode},
             connect_timeout=adv.connect_timeout,
@@ -65,7 +75,7 @@ class S3StorageAdapter(BaseStorageAdapter):
         try:
             self.client.head_bucket(Bucket=self._require_bucket())
             return True
-        except ClientError as e:
+        except botocore_exceptions.ClientError as e:
             code = e.response.get("Error", {}).get("Code", "")
             # 403 表示凭据有效但无权限查看桶，连接本身是通的
             if code == "403":
@@ -81,34 +91,37 @@ class S3StorageAdapter(BaseStorageAdapter):
             # 按端点分片参数配置：超过分片大小阈值即分片并发上传（并发受内存预算护栏约束）；
             # 流式传输（stream）时阈值为超大值，等效单次上传
             part_size, concurrency, _ = self._multipart_settings()
-            transfer_config = TransferConfig(
+            transfer_config = boto_transfer.TransferConfig(
                 multipart_threshold=part_size,
                 multipart_chunksize=part_size,
                 max_concurrency=concurrency,
             )
             self.client.upload_file(local_path, self._require_bucket(), remote_path, Config=transfer_config)
-        except Exception as e:
-            raise CustomException(msg=f"S3 上传失败: {e!s}")
+        except Exception:
+            logger.exception('S3 上传失败')
+            raise
         return remote_path
 
     def _sync_download(self, remote_path: str, local_path: str) -> str:
         try:
             self.client.download_file(self._require_bucket(), remote_path, local_path)
-        except Exception as e:
-            raise CustomException(msg=f"S3 下载失败: {e!s}")
+        except Exception:
+            logger.exception('S3 下载失败')
+            raise
         return local_path
 
     def _sync_delete(self, remote_path: str) -> None:
         try:
             self.client.delete_object(Bucket=self._require_bucket(), Key=remote_path)
-        except Exception as e:
-            raise CustomException(msg=f"S3 删除失败: {e!s}")
+        except Exception:
+            logger.exception('S3 删除失败')
+            raise
 
     def _sync_exists(self, remote_path: str) -> bool:
         try:
             self.client.head_object(Bucket=self._require_bucket(), Key=remote_path)
             return True
-        except ClientError as e:
+        except botocore_exceptions.ClientError as e:
             if e.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 404:
                 return False
             logger.warning(f"S3 head_object 失败: {e}")
@@ -162,8 +175,9 @@ class S3StorageAdapter(BaseStorageAdapter):
                 else:
                     break
             return result
-        except Exception as e:
-            raise CustomException(msg=f"S3 列表失败: {e!s}")
+        except Exception:
+            logger.exception('S3 列表失败')
+            raise
 
     def _sync_list_page(self, prefix: str, page_size: int, cursor: str | None) -> StoragePage:
         """游标分页：单次 SDK 请求只拉一页（S3 ContinuationToken），翻页经前端回传游标。"""
@@ -202,16 +216,32 @@ class S3StorageAdapter(BaseStorageAdapter):
                 has_next=bool(resp.get("IsTruncated")),
                 next_cursor=resp.get("NextContinuationToken"),
             )
-        except Exception as e:
-            raise CustomException(msg=f"S3 列表失败: {e!s}")
+        except Exception:
+            logger.exception('S3 列表失败')
+            raise
 
     def _sync_list_buckets(self) -> list[str]:
         """列出账号下全部存储桶。"""
         try:
             resp = self.client.list_buckets()
             return [b.get("Name", "") for b in resp.get("Buckets", []) if b.get("Name")]
+        except Exception:
+            logger.exception('S3 桶列表失败')
+            raise
+
+    def _sync_create_bucket(self, bucket: str) -> None:
+        """创建桶；AWS 规定 us-east-1 以外的区域必须带 LocationConstraint。"""
+        try:
+            kwargs: dict[str, Any] = {"Bucket": bucket}
+            region = (self.config.region or "").strip()
+            if region and region != "us-east-1":
+                kwargs["CreateBucketConfiguration"] = {"LocationConstraint": region}
+            self.client.create_bucket(**kwargs)
+        except CustomException:
+            raise
         except Exception as e:
-            raise CustomException(msg=f"S3 桶列表失败: {e!s}")
+            logger.exception('S3 创建桶失败')
+            raise CustomException(msg=f"S3 创建桶失败: {e}") from e
 
     def _sync_get_url(self, remote_path: str, expire: int) -> str:
         try:
@@ -220,8 +250,9 @@ class S3StorageAdapter(BaseStorageAdapter):
                 Params={"Bucket": self._require_bucket(), "Key": remote_path},
                 ExpiresIn=expire,
             )
-        except Exception as e:
-            raise CustomException(msg=f"S3 生成预签名 URL 失败: {e!s}")
+        except Exception:
+            logger.exception('S3 生成预签名 URL 失败')
+            raise
 
     def _sync_close(self) -> None:
         """关闭 boto3 客户端连接。"""
@@ -252,14 +283,16 @@ class S3StorageAdapter(BaseStorageAdapter):
     def _sync_mkdir(self, remote_dir: str) -> None:
         try:
             self.client.put_object(Bucket=self._require_bucket(), Key=remote_dir.rstrip("/") + "/", Body=b"")
-        except Exception as e:
-            raise CustomException(msg=f"S3 创建目录失败: {e!s}")
+        except Exception:
+            logger.exception('S3 创建目录失败')
+            raise
 
     def _sync_rmdir(self, remote_dir: str) -> None:
         try:
             self.client.delete_object(Bucket=self._require_bucket(), Key=remote_dir.rstrip("/") + "/")
-        except Exception as e:
-            raise CustomException(msg=f"S3 删除目录失败: {e!s}")
+        except Exception:
+            logger.exception('S3 删除目录失败')
+            raise
 
     def _sync_copy(self, src: str, dst: str) -> None:
         """复制：目录走基类递归实现；文件用服务端 copy_object。"""
@@ -272,8 +305,9 @@ class S3StorageAdapter(BaseStorageAdapter):
                 CopySource={"Bucket": self._require_bucket(), "Key": src},
                 Key=dst,
             )
-        except Exception as e:
-            raise CustomException(msg=f"S3 复制失败: {e!s}")
+        except Exception:
+            logger.exception('S3 复制失败')
+            raise
 
     def _sync_rename(self, src: str, dst: str) -> None:
         """重命名/移动：目录先复制后删除；文件 copy_object 后删源。"""
@@ -286,8 +320,9 @@ class S3StorageAdapter(BaseStorageAdapter):
     def _sync_list_recursive(self, prefix: str) -> list[StorageObject]:
         try:
             keys = self._list_all_keys(prefix)
-        except Exception as e:
-            raise CustomException(msg=f"S3 递归列表失败: {e!s}")
+        except Exception:
+            logger.exception('S3 递归列表失败')
+            raise
         return self._entries_from_keys(keys)
 
     def _sync_delete_dir(self, remote_dir: str) -> None:
@@ -302,5 +337,6 @@ class S3StorageAdapter(BaseStorageAdapter):
                     Bucket=self._require_bucket(),
                     Delete={"Objects": [{"Key": k} for k in keys[i : i + 1000]], "Quiet": True},
                 )
-        except Exception as e:
-            raise CustomException(msg=f"S3 递归删除失败: {e!s}")
+        except Exception:
+            logger.exception('S3 递归删除失败')
+            raise

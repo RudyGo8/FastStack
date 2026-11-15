@@ -1,5 +1,7 @@
 import asyncio
 import json
+import re
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
@@ -29,6 +31,7 @@ from sqlalchemy.orm import Session
 
 from app.config.setting import settings
 from app.core.database import engine
+from app.core.exceptions import CustomException
 from app.core.logger import logger
 
 # 任务状态常量（与 task_job.status 注释保持一致：0待执行 1执行中 2成功 3失败）
@@ -94,6 +97,16 @@ class SchedulerUtil:
     """定时任务 SDK — 封装 APScheduler 核心操作与任务执行记录落库。"""
 
     redis_instance: Redis | None = None
+    # ── 内置处理器白名单（「脚本类」与「内置函数类」任务的分界）────────────────
+    # 节点任务 func 形如 "builtin:<模块名>[.<函数名>]"（模块限定在 handlers 包内）时，
+    # 由注册表解析后**直接调用**，不经过 exec —— 因此不受 SCHEDULER_ALLOW_CODE_EXEC 限制。
+    # 这样该开关只关闭"执行用户提交代码块"的能力，而不是整个调度特性。
+    BUILTIN_PREFIX = "builtin:"
+    BUILTIN_HANDLERS_MODULE = "app.modules.task.cronjob.node.handlers"
+    # 名称白名单：仅允许「模块名」或「模块名.函数名」，禁止点号穿越 / 括号 / 特殊字符
+    _BUILTIN_NAME_RE = re.compile(r"^[a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*)?$")
+    _builtin_handlers: dict[str, Callable[..., Any]] = {}
+
     # 多 worker 选主状态：_redis 为空视为单机直跑；_leader_token 非空表示本进程持有调度锁
     _redis: Redis | None = None
     _leader_token: str | None = None
@@ -252,14 +265,26 @@ class SchedulerUtil:
                     except Exception:
                         pass
 
+            # 已存在的 job 也必须重新注册：node.func/trigger 在数据库中被修正后，
+            # 若只补齐缺失 job，调度器会一直持有旧 args（例如旧的代码块 func），
+            # 造成“数据库已是 builtin，但启动仍报不可调度”的假象。
             for node in nodes:
-                if str(node.id) not in want_ids or str(node.id) in existing:
+                if str(node.id) not in want_ids:
                     continue
                 try:
                     register_node_job(node)
-                    logger.info(f"节点任务自愈: 已恢复节点 {node.id} 的定时任务")
+                    logger.info(f"节点任务自愈: 已恢复/刷新节点 {node.id} 的定时任务")
                 except Exception as e:
                     logger.error(f"节点任务自愈: 恢复节点 {node.id} 失败: {e!s}", exc_info=True)
+
+            # 刷新完成后再做可观测性判定，避免把旧 job 的 args 误报成数据库配置错误。
+            for node in nodes:
+                if node.status != 0 or not node.trigger:
+                    continue
+                schedulable, reason = cls.describe_schedulability(node.func)
+                if not schedulable:
+                    logger.warning(f"节点任务不可调度（已启用但不会执行）: id={node.id} name={node.name!r} 原因={reason}")
+            cls.log_unschedulable_jobs(context="启动自愈")
         except Exception as e:
             logger.error(f"节点任务自愈执行失败: {e!s}", exc_info=True)
 
@@ -419,7 +444,7 @@ class SchedulerUtil:
                 "status": status,
                 "error": _humanize_job_error(detail) if status == JOB_STATUS_FAILED else None,
                 "result": None if status == JOB_STATUS_FAILED else (str(detail)[:4000] if detail is not None else None),
-                "next_run_time": str(job.next_run_time) if job and job.next_run_time else None,
+                "next_run_time": str(getattr(job, "next_run_time", None)) if getattr(job, "next_run_time", None) else None,
                 "job_state": SchedulerUtil._get_job_state(job) if job else None,
             }
             cls._record_job_log(record)
@@ -434,7 +459,7 @@ class SchedulerUtil:
                 pass
             return
         # 一次性 date 计划执行完成（无下次运行时间）后移除
-        if job and job.next_run_time is None and isinstance(getattr(job, "trigger", None), DateTrigger):
+        if job and getattr(job, "next_run_time", None) is None and isinstance(getattr(job, "trigger", None), DateTrigger):
             try:
                 SchedulerUtil.remove_job(job_id=job_id)
                 logger.info(f"一次性 date 任务 {job_id} 已完成，已从调度器移除")
@@ -508,7 +533,8 @@ class SchedulerUtil:
         job = cls.get_job(job_id=str(job_id))
         if not job:
             return 3
-        if job.next_run_time is None:
+        # pending/未排程任务没有 next_run_time 属性（APScheduler 只在真正排程后设置），必须 getattr 兜底
+        if getattr(job, "next_run_time", None) is None:
             return 1
         if scheduler.state == 0:
             return 2
@@ -541,15 +567,187 @@ class SchedulerUtil:
         return temp_job
 
     @classmethod
+    def describe_schedulability(cls, code_block: str | None) -> tuple[bool, str | None]:
+        """判断某个 func（代码块 / ``builtin:`` 引用）当前是否可调度。
+
+        单一事实来源：创建/更新守卫、节点列表状态字段、调度器巡检日志都调用它，
+        避免各处对 ``SCHEDULER_ALLOW_CODE_EXEC`` 的理解不一致。
+
+        参数:
+        - code_block (str | None): 节点的 func 字段。
+
+        返回:
+        - tuple[bool, str | None]: (是否可调度, 不可调度原因)。
+        """
+        raw = (code_block or "").strip()
+        if not raw:
+            return False, "未配置函数或代码块（节点不会执行）"
+        if raw.startswith(cls.BUILTIN_PREFIX):
+            try:
+                cls.resolve_builtin_handler(raw)
+            except ValueError as exc:
+                return False, f"内置处理器不可用：{exc}"
+            return True, None
+        if not settings.SCHEDULER_ALLOW_CODE_EXEC:
+            return False, (
+                "服务端已禁用代码块执行（SCHEDULER_ALLOW_CODE_EXEC=False）；"
+                "请改用内置函数型任务——把 func 改为 builtin:<模块名>[.<函数名>]（不经 exec，不受该开关限制）"
+            )
+        return True, None
+
+    @classmethod
+    def require_schedulable(cls, code_block: str | None) -> None:
+        """不可调度时抛出业务异常；可调度时直接返回。
+
+        把「取判定结果 + 抛异常」收敛到一处：``describe_schedulability`` 的 reason 是
+        ``str | None``（可调度时为 None），调用点直接 ``CustomException(msg=reason)`` 会
+        传入 None 让客户端收到空文案；这里统一兜底，也避免每个调用点各写一份兜底文案。
+
+        参数:
+        - code_block (str | None): 节点的 func 字段。
+
+        异常:
+        - CustomException: 当前不可调度时抛出（含可操作原因）。
+        """
+        schedulable, reason = cls.describe_schedulability(code_block)
+        if not schedulable:
+            raise CustomException(msg=reason or "当前任务不可调度，请检查任务配置")
+
+    @classmethod
+    def job_code_block(cls, job: Job | None) -> str | None:
+        """从调度器 job 的 args 中取回 func（约定见 _add_job_with_trigger: args=[job_id, code_block, *args]）。
+
+        参数:
+        - job (Job | None): 调度器任务。
+
+        返回:
+        - str | None: func 原文；无法取得时返回 None。
+        """
+        args = list(getattr(job, "args", None) or [])
+        if len(args) < 2 or args[1] is None:
+            return None
+        return str(args[1])
+
+    @classmethod
+    def iter_unschedulable_jobs(cls) -> list[tuple[str, str, str]]:
+        """列出调度器中「已注册但当前不可执行」的任务：[(job_id, job_name, reason)]。
+
+        用于运维可观测性：开关调整或内置处理器改名后，存量任务不会静默失效。
+
+        返回:
+        - list[tuple[str, str, str]]: 不可调度任务清单。
+        """
+        result: list[tuple[str, str, str]] = []
+        for job in cls.get_jobs():
+            schedulable, reason = cls.describe_schedulability(cls.job_code_block(job))
+            if not schedulable and reason:
+                result.append((str(job.id), str(job.name or ""), reason))
+        return result
+
+    @classmethod
+    def log_unschedulable_jobs(cls, *, context: str) -> list[tuple[str, str, str]]:
+        """把「已注册但不可执行」的任务以 WARN 打出（带具体任务标识），返回同一清单。
+
+        参数:
+        - context (str): 调用场景（如 "启动自愈" / "调度器状态查询"），便于日志定位。
+
+        返回:
+        - list[tuple[str, str, str]]: 不可调度任务清单。
+        """
+        found = cls.iter_unschedulable_jobs()
+        for job_id, job_name, reason in found:
+            logger.warning(f"[{context}] 调度器中的任务当前不可执行: id={job_id} name={job_name!r} 原因={reason}")
+        return found
+
+    @classmethod
+    def register_builtin_handler(cls, name: str, handler: Callable[..., Any]) -> None:
+        """注册一个内置处理器（供无 exec 的「内置函数型任务」使用）。
+
+        参数:
+        - name (str): 名称（``func = "builtin:<name>"`` 时引用）。
+        - handler (Callable): 可调用对象。
+
+        返回:
+        - None
+        """
+        cls._builtin_handlers[name] = handler
+
+    @classmethod
+    def resolve_builtin_handler(cls, code_block: str | None) -> Callable[..., Any] | None:
+        """解析 ``builtin:<name>`` 引用；非内置引用返回 None。
+
+        参数:
+        - code_block (str | None): 节点的 func 字段。
+
+        返回:
+        - Callable | None: 内置处理器；不是内置引用时返回 None。
+
+        异常:
+        - ValueError: 引用形态非法、模块/函数不存在或不是可调用对象时抛出
+          （**绝不回退到 exec**，避免"看起来是内置任务、实际被执行成代码块"）。
+        """
+        raw = (code_block or "").strip()
+        if not raw.startswith(cls.BUILTIN_PREFIX):
+            return None
+        name = raw[len(cls.BUILTIN_PREFIX) :].strip()
+        if not cls._BUILTIN_NAME_RE.match(name):
+            raise ValueError(f"内置处理器名称非法（仅允许 模块名[.函数名]，实际 {raw!r}）")
+
+        cached = cls._builtin_handlers.get(name)
+        if cached is not None:
+            return cached
+
+        module_name, _, func_name = name.partition(".")
+        func_name = func_name or module_name
+        import importlib
+
+        module_path = f"{cls.BUILTIN_HANDLERS_MODULE}.{module_name}"
+        try:
+            module = importlib.import_module(module_path)
+        except ModuleNotFoundError as exc:
+            raise ValueError(f"内置处理器模块不存在：{module_path}") from exc
+        handler = getattr(module, func_name, None)
+        if handler is None or not callable(handler):
+            raise ValueError(f"内置处理器不可用（{module_path}.{func_name} 不存在或不可调用）")
+        # 安全加固（复核 R1）：只接受「在本模块内定义」或「该模块显式声明」的可调用对象。
+        # 否则 handler 模块里任何一条 `from os import system` 之类的导入，都会变成
+        # 绕过 SCHEDULER_ALLOW_CODE_EXEC 的无限制执行入口。
+        declared = getattr(module, "HANDLERS", None)
+        if isinstance(declared, dict):
+            if declared.get(func_name) is not handler:
+                raise ValueError(f"内置处理器未在该模块的 HANDLERS 中声明：{module_path}.{func_name}")
+        elif getattr(handler, "__module__", None) != module.__name__:
+            raise ValueError(
+                f"内置处理器必须在本模块内定义或经 HANDLERS 声明：{module_path}.{func_name} "
+                f"实际来自 {getattr(handler, '__module__', '未知来源')}，已拒绝"
+            )
+        cls._builtin_handlers[name] = handler
+        return handler
+
+    @classmethod
     def _task_wrapper(cls, job_id: str | int, code_block: str | None, *args, **kwargs):
         """任务执行包装器，执行自定义代码块（同步版本，用于 ThreadPoolExecutor）
 
-        安全提示：code_block 来自页面提交，exec 等同给所有能创建任务的人
-        服务器代码执行权限。生产环境应设置 SCHEDULER_ALLOW_CODE_EXEC=False
-        关闭该能力，仅保留内置函数型任务。
+        两类任务：
+        - **内置函数型**（``code_block = "builtin:<模块名>[.<函数名>]"``）：走白名单注册表直接调用，
+          **不使用 exec**，因此不受 ``SCHEDULER_ALLOW_CODE_EXEC`` 限制；
+        - **代码块型**（其它内容）：``exec`` 等于给所有能创建任务的人服务器代码执行权限，**默认关闭**，
+          关闭时执行入口直接失败并把原因写入执行日志（而不是静默跳过）。
         """
-        if code_block and code_block.strip() and not settings.SCHEDULER_ALLOW_CODE_EXEC:
-            message = f"任务 {job_id} 含用户提交代码块，已因 SCHEDULER_ALLOW_CODE_EXEC=False 拒绝执行"
+        # 内置函数型任务（builtin:<name>）：白名单解析后直接调用，不经过 exec，
+        # 因此即使 SCHEDULER_ALLOW_CODE_EXEC=False 也能正常调度
+        raw_code = (code_block or "").strip()
+        if raw_code.startswith(cls.BUILTIN_PREFIX):
+            handler = cls.resolve_builtin_handler(raw_code)
+            logger.info(f"任务 {job_id} 以内置处理器执行（不经 exec）: {raw_code}")
+            return handler(*args, **kwargs) if handler else None
+
+        if raw_code and not settings.SCHEDULER_ALLOW_CODE_EXEC:
+            message = (
+                f"任务 {job_id} 含用户提交的代码块，已拒绝执行：服务端默认禁止定时任务执行代码块。"
+                f"如确需该能力，请显式设置 SCHEDULER_ALLOW_CODE_EXEC=true（等同授予服务器代码执行权限，请谨慎评估）；"
+                f"若只需内置能力，可把 func 改为 builtin:<模块名>[.<函数名>]"
+            )
             logger.error(message)
             raise RuntimeError(message)
 

@@ -1,0 +1,6 @@
+# ============================================================================
+# SQLite 驱动（DATABASE_TYPE=sqlite 时必需）
+#   适用于本地开发与单机小规模部署；AINI 的 AI 模块内嵌知识库也复用该驱动
+# 用法：pip install -r requirements/base.txt -r requirements/db/sqlite.txt
+# ============================================================================
+aiosqlite==0.22.1                      # 异步驱动（sqlite+aiosqlite:///）

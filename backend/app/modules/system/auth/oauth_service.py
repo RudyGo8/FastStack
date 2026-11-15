@@ -72,7 +72,9 @@ def _require_credentials(provider: OAuthProvider) -> tuple[str, str]:
     else:
         raise CustomException(msg="不支持的 OAuth 渠道")
     if not cid or not sec:
-        raise CustomException(msg=f"{provider} OAuth 未配置（客户端密钥为空）")
+        # 渠道密钥为空属**部署配置缺失**：客户端无论怎么改请求都无法成功，按 500 返回以免监控误判为客户端错误
+        logger.error(f"{provider} OAuth 未配置（客户端密钥为空）")
+        raise RuntimeError(f"{provider} OAuth 未配置（客户端密钥为空）")
     return cid, sec
 
 
@@ -136,7 +138,7 @@ async def _http_json(method: str, url: str, **kwargs: Any) -> Any:
         except json.JSONDecodeError:
             text = r.text
             logger.error(f"OAuth 非 JSON 响应: {text[:500]}")
-            raise CustomException(msg="OAuth 接口返回异常")
+            raise
 
 
 async def _http_text(method: str, url: str, **kwargs: Any) -> str:
@@ -437,6 +439,10 @@ async def start_oauth_login(
         )
     except CustomException as e:
         return _frontend_error_redirect(redirect_uri or fallback, e.msg)
+    except Exception:
+        # 浏览器跳转边界：意外故障不向用户抛裸 500，细节进日志、用户回到错误页（t19）
+        logger.exception("OAuth 授权入口处理失败")
+        return _frontend_error_redirect(redirect_uri or fallback, "登录服务暂时不可用，请稍后重试")
 
 
 async def finish_oauth_login(
@@ -471,6 +477,10 @@ async def finish_oauth_login(
         )
     except CustomException as e:
         return _frontend_error_redirect(await _frontend(), e.msg)
+    except Exception:
+        # 同上：OAuth 回调是浏览器跳转边界，意外故障统一回错误页
+        logger.exception("OAuth 回调处理失败")
+        return _frontend_error_redirect(await _frontend(), "登录服务暂时不可用，请稍后重试")
     return _frontend_success_redirect(
         frontend,
         token.access_token,

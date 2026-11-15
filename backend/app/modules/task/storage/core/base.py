@@ -76,11 +76,12 @@ def encrypt_password(plain: str | None) -> str:
 
 
 def decrypt_password(cipher: str | None) -> str:
-    """密文 → 明文密码。空值原样返回空串，解不开时抛业务异常。"""
-    try:
-        return CryptoUtil.decrypt(cipher)
-    except CustomException as e:
-        raise CustomException(msg=f"存储源密码解密失败：{e!s}")
+    """密文 → 明文密码。空值原样返回空串。
+
+    解密失败（密钥变更/数据损坏）由 ``CryptoUtil.decrypt`` 抛 ``RuntimeError``，
+    交由全局异常处理器映射为 5xx（t19：不在业务代码里包装意外异常，细节只进日志）。
+    """
+    return CryptoUtil.decrypt(cipher)
 
 
 # 文件系统类协议与对象存储类协议的划分：仅用于文档说明与配置元数据，
@@ -184,6 +185,10 @@ class BaseStorageAdapter(ABC):
         """列出账号下全部存储桶（对象存储专用）。FTP/SFTP/LOCAL 等协议无需实现。"""
         raise NotImplementedError(f"{type(self).__name__} 不支持桶列表")
 
+    def _sync_create_bucket(self, bucket: str) -> None:
+        """创建存储桶（对象存储专用）。FTP/SFTP/LOCAL 等协议无需实现。"""
+        raise NotImplementedError(f"{type(self).__name__} 不支持创建桶")
+
     def _multipart_settings(self) -> tuple[int, int, bool]:
         """返回 (分片大小, 并发数, 是否分片)，分片大小单位字节；并发按内存预算护栏收敛。
 
@@ -278,6 +283,7 @@ class BaseStorageAdapter(ABC):
     def _sync_copy_dir(self, src: str, dst: str) -> None:
         """递归复制目录（src/dst 为相对存储真根的路径）：遍历后先建目录再逐文件复制。"""
         src = src.rstrip("/")
+        dst = dst.rstrip("/")
         for entry in self._sync_list_recursive(src):
             full = entry.key
             rel = full[len(src) + 1 :] if full.startswith(src + "/") else entry.key
@@ -322,7 +328,8 @@ class BaseStorageAdapter(ABC):
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 list(pool.map(_run, tasks))
         if errors:
-            raise CustomException(msg=f"批量上传失败 {len(errors)}/{len(tasks)} 个文件，首个错误: {errors[0]!s}")
+            logger.error(f"批量上传失败 {len(errors)}/{len(tasks)} 个文件，首个错误: {errors[0]!s}")
+            raise RuntimeError(f"批量上传失败 {len(errors)}/{len(tasks)} 个文件，首个错误: {errors[0]!s}")
         return len(tasks)
 
     def _sync_download_dir(self, remote_dir: str, local_dir: str, concurrency: int) -> int:
@@ -352,7 +359,8 @@ class BaseStorageAdapter(ABC):
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 list(pool.map(_run, tasks))
         if errors:
-            raise CustomException(msg=f"批量下载失败 {len(errors)}/{len(tasks)} 个文件，首个错误: {errors[0]!s}")
+            logger.error(f"批量下载失败 {len(errors)}/{len(tasks)} 个文件，首个错误: {errors[0]!s}")
+            raise RuntimeError(f"批量下载失败 {len(errors)}/{len(tasks)} 个文件，首个错误: {errors[0]!s}")
         return len(tasks)
 
     @staticmethod
@@ -426,6 +434,10 @@ class BaseStorageAdapter(ABC):
     async def list_buckets(self) -> list[str]:
         """列出账号下全部存储桶（对象存储专用）。"""
         return await asyncio.to_thread(self._sync_list_buckets)
+
+    async def create_bucket(self, bucket: str) -> None:
+        """创建存储桶（对象存储专用；桶名规则由各协议校验）。"""
+        await asyncio.to_thread(self._sync_create_bucket, bucket)
 
     async def list_recursive(self, prefix: str = "") -> list[StorageObject]:
         """递归列出目录树（含隐含目录条目）。"""

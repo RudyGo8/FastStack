@@ -110,6 +110,17 @@ async def list_storage_buckets_controller(
     return SuccessResponse(data=result, msg="查询桶列表成功")
 
 
+@StorageBrowseRouter.post("/create-bucket", summary="创建存储桶（对象存储）", response_model=ResponseSchema[None])
+async def create_storage_bucket_controller(
+    auth: Annotated[AuthSchema, Security(AuthPermission(["module_task:storage:browse:update"]))],
+    db: Annotated[AsyncSession, Depends(db_getter)],
+    bucket: Annotated[str, Body(description="桶名（COS 需带 -appid 后缀）")],
+    source_id: Annotated[int | None, Body(description="存储源ID（不传使用默认存储源）")] = None,
+) -> JSONResponse:
+    await StorageFileService(auth, db).create_bucket(source_id=source_id, bucket=bucket)
+    return SuccessResponse(msg="创建桶成功")
+
+
 @StorageBrowseRouter.post("/copy", summary="复制/移动文件", response_model=ResponseSchema[StoragePathResultSchema])
 async def copy_or_move_storage_file_controller(
     auth: Annotated[AuthSchema, Security(AuthPermission(["module_task:storage:browse:update"]))],

@@ -1,3 +1,4 @@
+import copy
 import re
 from datetime import datetime
 from typing import Any
@@ -15,6 +16,25 @@ from .schema import (
     GenTableColumnOutSchema,
     GenTableOutSchema,
 )
+from .template_safety import (
+    DIALECT_TYPE_IMPORTS,
+    column_type_base,
+    escape_template_text,
+    html_attr,
+    pick_sqlalchemy_type,
+    safe_ident,
+    safe_python_type,
+    vue_label,
+)
+
+# 哨兵文本：用于「用哨兵值渲染同一模板，得到结构骨架」的落盘前比对
+# （见 template_safety.assert_python_structure / assert_text_structure）
+SENTINEL_TEXT = "__SAFE_TEXT__"
+
+# 自由文本字段：哨兵化只针对它们（保证结构比对有意义）；标识符/类型/开关/长度等
+# 必须保持真实值，否则模板分支会与骨架不一致，产生误报
+_SENTINEL_TABLE_TEXT_FIELDS = ("table_name", "table_comment", "function_name", "business_name", "sub_table_name", "description")
+_SENTINEL_COLUMN_TEXT_FIELDS = ("column_comment", "dict_type")
 
 
 class Jinja2TemplateUtil:
@@ -75,6 +95,14 @@ class Jinja2TemplateUtil:
                         "snake_to_camel": CamelCaseUtil.snake_to_camel,
                         "get_sqlalchemy_type": cls.get_sqlalchemy_type,
                         "python_to_ts_type": cls.python_type_to_ts_type,
+                        # 模板内按上下文安全化（详见 template_safety.py）：
+                        # 绝大多数值已在 prepare_context 统一处理，模板里可按需显式调用
+                        "py_text": escape_template_text,
+                        "py_ident": safe_ident,
+                        "py_type": safe_python_type,
+                        "vue_label": vue_label,
+                        # 静态 HTML 属性值：实体转义（展示保真，不用 \uXXXX）
+                        "html_attr": html_attr,
                     },
                 )
             return cls._env
@@ -147,6 +175,194 @@ class Jinja2TemplateUtil:
         return "/".join(segs) if segs else "entity"
 
     @classmethod
+    def safe_render_schema(cls, gen_table: GenTableOutSchema) -> GenTableOutSchema:
+        """构造「仅用于模板渲染」的安全副本。
+
+        生成物是会被执行/被构建链消费的源码（``.py`` 会被 ``app/core/discover.py`` 启动时 import），
+        因此所有用户可控文本必须按所处上下文安全化后才能进模板。此处统一处理，
+        避免逐个模板/逐个字段遗漏；``autoescape=True`` 不适用（会把生成的代码本身转义坏）。
+
+        **从 schema 进入模板的值按四类显式处理**（实现见 template_safety.py）：
+        1. 字符串类（注释/描述/功能名/表名…）→ ``escape_template_text``（``\\uXXXX``，仅用于字符串/注释上下文）；
+        2. 标识符类（列名/类名/模块名/python_field）→ ``safe_ident``（含关键字与保留字排除）；
+        3. 代码位置类（SQLAlchemy 类型、长度/精度）→ ``pick_sqlalchemy_type``：**只从常量白名单派生**，不接收自由文本；
+        4. 路径类（包名/模块名/业务路径/文件名）→ slug/白名单规范化（``business_name_to_path`` 等），不含 ``..`` 与分隔符。
+        展示位置（``.vue`` 文本节点与静态属性）另有 ``vue_label``/``html_attr``：HTML 实体转义，保真且不破坏标记结构。
+
+        参数:
+        - gen_table (GenTableOutSchema): 原始生成配置（不会被修改）。
+
+        返回:
+        - GenTableOutSchema: 深拷贝并按上下文安全化后的副本。
+        """
+        safe_table = copy.deepcopy(gen_table)
+        cls._sanitize_schema_in_place(safe_table, set())
+        return safe_table
+
+    @classmethod
+    def sentinel_render_schema(cls, gen_table: GenTableOutSchema) -> GenTableOutSchema:
+        """构造「哨兵值」副本：自由文本换成固定哨兵（空值保持为空），用于生成结构骨架。
+
+        与 :meth:`safe_render_schema` 的区别：这里不追求可展示/可用，只要求**结构中性**——
+        值里不含任何可能改变模板分支或语法结构的字符。用它渲染同一模板得到的 AST/行结构
+        即为「该模板的规范骨架」，落盘前与真实产物比对（见 template_safety 的结构闸门）。
+
+        参数:
+        - gen_table (GenTableOutSchema): 已安全化的渲染配置。
+
+        返回:
+        - GenTableOutSchema: 自由文本字段被替换为哨兵的深拷贝。
+        """
+        sentinel_table = copy.deepcopy(gen_table)
+        cls._sentinelize_schema_in_place(sentinel_table, set())
+        return sentinel_table
+
+    @classmethod
+    def _sentinelize_schema_in_place(cls, table: GenTableOutSchema, seen: set[int]) -> None:
+        """就地哨兵化自由文本字段（标识符/类型/开关/长度保持不变），带环保护。"""
+        if table is None or id(table) in seen:
+            return
+        seen.add(id(table))
+        for field in _SENTINEL_TABLE_TEXT_FIELDS:
+            if hasattr(table, field):
+                setattr(table, field, _sentinelize_value(getattr(table, field)))
+        for column in table.columns or []:
+            cls._sentinelize_column_in_place(column, seen)
+        if table.pk_column is not None:
+            cls._sentinelize_column_in_place(table.pk_column, seen)
+        if table.sub_table is not None:
+            cls._sentinelize_schema_in_place(table.sub_table, seen)
+
+    @staticmethod
+    def _sentinelize_column_in_place(column: GenTableColumnOutSchema, seen: set[int]) -> None:
+        """就地哨兵化字段级自由文本（列名/类型/长度等保持原值）。"""
+        if column is None or id(column) in seen:
+            return
+        seen.add(id(column))
+        for field in _SENTINEL_COLUMN_TEXT_FIELDS:
+            if hasattr(column, field):
+                setattr(column, field, _sentinelize_value(getattr(column, field)))
+
+    @classmethod
+    def iter_free_text_values(cls, gen_table: GenTableOutSchema) -> list[str]:
+        """枚举本次渲染里会进入模板的**自由文本值**（与哨兵化字段一一对应，按同样顺序）。
+
+        供 ``.vue``/``.ts`` 的行结构比对使用：把真实值与哨兵都抹成占位符后再逐行比较。
+
+        参数:
+        - gen_table (GenTableOutSchema): 已安全化的渲染配置。
+
+        返回:
+        - list[str]: 非空自由文本值列表。
+        """
+        values: list[str] = []
+        seen: set[int] = set()
+
+        def walk(table: GenTableOutSchema) -> None:
+            if table is None or id(table) in seen:
+                return
+            seen.add(id(table))
+            for field in _SENTINEL_TABLE_TEXT_FIELDS:
+                text = getattr(table, field, None)
+                if text:
+                    values.append(str(text))
+            for column in table.columns or []:
+                collect_column(column)
+            if table.pk_column is not None:
+                collect_column(table.pk_column)
+            if table.sub_table is not None:
+                walk(table.sub_table)
+
+        def collect_column(column: GenTableColumnOutSchema) -> None:
+            if column is None or id(column) in seen:
+                return
+            seen.add(id(column))
+            for field in _SENTINEL_COLUMN_TEXT_FIELDS:
+                text = getattr(column, field, None)
+                if text:
+                    values.append(str(text))
+
+        walk(gen_table)
+        return values
+
+    @classmethod
+    def iter_render_dynamic_values(cls, gen_table: GenTableOutSchema) -> list[str]:
+        """返回真实产物里可能出现的**所有动态文本形态**（原值 / 转义值 / 展示形态）。
+
+        供 ``.vue``/``.ts`` 的行结构比对把动态部分抹成占位符：同一个值可能以
+        ``escape_template_text``（JS 字符串）、``html_attr``（静态属性）、``vue_label``（文本节点）
+        三种形态出现，三者都要抹掉，否则会与骨架产生假阳性。
+
+        参数:
+        - gen_table (GenTableOutSchema): 已安全化的渲染配置。
+
+        返回:
+        - list[str]: 动态文本形态列表。
+        """
+        tokens: list[str] = []
+        for value in cls.iter_free_text_values(gen_table):
+            text = str(value)
+            tokens.extend([text, escape_template_text(text), html_attr(text), vue_label(text)])
+        return tokens
+
+    @classmethod
+    def _sanitize_schema_in_place(cls, table: GenTableOutSchema, seen: set[int]) -> None:
+        """就地安全化一张表（表级文本 + 全部字段 + 子表），带环保护。
+
+        参数:
+        - table (GenTableOutSchema): 待处理的安全副本（会被修改）。
+        - seen (set[int]): 已处理对象 id 集合（主/子表互相引用时防重入）。
+
+        返回:
+        - None
+        """
+        if table is None or id(table) in seen:
+            return
+        seen.add(id(table))
+
+        # 落进字符串字面量/注释/文档字符串的文本
+        table.table_name = escape_template_text(table.table_name)
+        table.table_comment = escape_template_text(table.table_comment)
+        table.function_name = escape_template_text(table.function_name)
+        # 落进标识符位置的值（类名 / 模块名 / 包名 / 外键列名）
+        table.class_name = safe_ident(table.class_name, default="")
+        table.module_name = safe_ident(table.module_name, default="")
+        table.package_name = safe_ident(table.package_name, default="")
+        table.sub_table_fk_name = safe_ident(table.sub_table_fk_name, default="")
+        # 业务名允许 a/b 多段，且参与目录派生，按文本处理即可（派生见 prepare_context）
+        table.business_name = escape_template_text(table.business_name)
+        table.sub_table_name = escape_template_text(table.sub_table_name)
+
+        for column in table.columns or []:
+            cls._sanitize_column_in_place(column, seen)
+        # pk_column 通常就是 columns 里的同一个对象（见 set_pk_column），必须靠 seen 去重，
+        # 否则同一字段被转义两次（\u0027 → \u005cu0027），产物里的文本会变形
+        if table.pk_column is not None:
+            cls._sanitize_column_in_place(table.pk_column, seen)
+        if table.sub_table is not None:
+            cls._sanitize_schema_in_place(table.sub_table, seen)
+
+    @staticmethod
+    def _sanitize_column_in_place(column: GenTableColumnOutSchema, seen: set[int]) -> None:
+        """就地安全化单个字段：列名/类型注解按标识符处理，注释/字典类型按文本转义。
+
+        参数:
+        - column (GenTableColumnOutSchema): 待处理的安全副本（会被修改）。
+        - seen (set[int]): 已处理对象 id 集合（同一字段被 columns 与 pk_column 同时引用时防重复转义）。
+
+        返回:
+        - None
+        """
+        if column is None or id(column) in seen:
+            return
+        seen.add(id(column))
+        column.column_name = safe_ident(column.column_name, default="")
+        column.python_type = safe_python_type(column.python_type)
+        column.python_field = safe_ident(column.python_field, default="")
+        column.column_comment = escape_template_text(column.column_comment)
+        column.dict_type = escape_template_text(column.dict_type)
+
+    @classmethod
     def prepare_context(cls, gen_table: GenTableOutSchema) -> dict[str, Any]:
         """准备模板变量。
 
@@ -159,6 +375,13 @@ class Jinja2TemplateUtil:
         # 处理options为None的情况
         # if not gen_table.options:
         #     raise ValueError('请先完善生成配置信息')
+        # 目录/文件名派生值仍按原始业务名计算，保证既有产物路径不变；
+        # 其余进入模板的内容一律取安全副本（详见 template_safety.py）。
+        business_name_raw = (gen_table.business_name or "").strip()
+        business_path = cls.business_name_to_path(business_name_raw)
+        business_name_slug = cls.business_name_to_slug(business_name_raw)
+        gen_table = cls.safe_render_schema(gen_table)
+
         class_name = gen_table.class_name or ""
         package_name = (gen_table.package_name or "").strip()
         module_name = (gen_table.module_name or "").strip()
@@ -169,8 +392,6 @@ class Jinja2TemplateUtil:
         # - 分系统根：package_name = module_xxx
         # - 目录固定为：module_xxx / module_name（不再额外使用业务名作为目录层级）
         # - 权限前缀固定为：module_xxx:module_name（操作在模板里再拼 :query/:create...）
-        business_path = cls.business_name_to_path(business_name)
-        business_name_slug = cls.business_name_to_slug(business_name)
         permission_prefix = ":".join([s for s in [package_name, module_name] if s])
         api_route_prefix = cls.get_api_route_prefix(package_name)
 
@@ -262,17 +483,20 @@ class Jinja2TemplateUtil:
         - dict[str, Any]: 子表模板上下文字典。
         """
         ctx = cls.prepare_context(sub)
-        scn = (sub.class_name or GenUtils.convert_class_name(sub.table_name or "")).strip()
+        # 父表字段同样进入模板（parent_* / relationship 实参），必须取自安全副本
+        parent_safe = cls.safe_render_schema(parent)
+        sub_safe = cls.safe_render_schema(sub)
+        scn = (sub_safe.class_name or GenUtils.convert_class_name(sub_safe.table_name or "")).strip()
         ctx["is_sub_entity"] = True
-        ctx["parent_class_name"] = parent.class_name or ""
-        ctx["parent_model_class_name"] = f"{parent.class_name}Model"
-        ctx["parent_table_name"] = parent.table_name or ""
-        ctx["parent_pk_column_name"] = (parent.pk_column.column_name if parent.pk_column else None) or "id"
-        ctx["parent_rel_name"] = SnakeCaseUtil.camel_to_snake(parent.class_name or "parent")
+        ctx["parent_class_name"] = parent_safe.class_name or ""
+        ctx["parent_model_class_name"] = f"{parent_safe.class_name}Model"
+        ctx["parent_table_name"] = parent_safe.table_name or ""
+        ctx["parent_pk_column_name"] = (parent_safe.pk_column.column_name if parent_safe.pk_column else None) or "id"
+        ctx["parent_rel_name"] = SnakeCaseUtil.camel_to_snake(parent_safe.class_name or "parent")
         ctx["parent_list_rel_name"] = f"{SnakeCaseUtil.camel_to_snake(scn)}_list"
-        ctx["sub_table_fk_name"] = (parent.sub_table_fk_name or "").strip()
-        ctx["model_import_list"] = cls.get_model_import_list(sub, is_sub_entity=True)
-        ctx["schema_import_list"] = cls.get_schema_import_list(sub)
+        ctx["sub_table_fk_name"] = (parent_safe.sub_table_fk_name or "").strip()
+        ctx["model_import_list"] = cls.get_model_import_list(sub_safe, is_sub_entity=True)
+        ctx["schema_import_list"] = cls.get_schema_import_list(sub_safe)
         return ctx
 
     @classmethod
@@ -472,10 +696,19 @@ class Jinja2TemplateUtil:
                         import_list.add(f"from sqlalchemy import {pk_type_import}")
                 continue
             if column.column_type:
+                sa_type = cls.get_sqlalchemy_type(column)
+                # ARRAY(item) 的 item 也必须导入，否则生成模型 import 失败（PG text[]/int[]）
+                if sa_type.startswith("ARRAY("):
+                    import_list.add("from sqlalchemy import ARRAY")
+                    item_type = sa_type[6:-1].split("(", 1)[0].strip()
+                    if item_type:
+                        import_list.add(f"from sqlalchemy import {item_type}")
                 data_type = cls.get_db_type(column.column_type)
-                if data_type in GenConstant.COLUMNTYPE_GEOMETRY:
-                    import_list.add("from geoalchemy2 import Geometry")
-                import_list.add(f"from sqlalchemy import {StringUtil.get_mapping_value_by_key_ignore_case(GenConstant.DB_TO_SQLALCHEMY, data_type)}")
+                # 非顶层导出的类型（JSONB/INET/CIDR/MACADDR/BIT/TSVECTOR/TSQUERY/Geometry 等）
+                # 走明确的模块映射，绝不再拼 `from sqlalchemy import <方言类型>`（非法语句）
+                mapped = StringUtil.get_mapping_value_by_key_ignore_case(GenConstant.DB_TO_SQLALCHEMY, data_type)
+                module, type_name = DIALECT_TYPE_IMPORTS.get(mapped, ("sqlalchemy", mapped))
+                import_list.add(f"from {module} import {type_name}")
             # 处理datetime类型的导入
             if column.python_type and column.python_type in GenConstant.TYPE_DATE:
                 if column.python_type == "datetime":
@@ -529,10 +762,9 @@ class Jinja2TemplateUtil:
         if "[]" in column_type:
             return "array"
 
-        # 提取基本类型
-        if "(" in column_type:
-            return column_type.split("(")[0]
-        return column_type
+        # 提取基本类型：走严格基名提取（只允许 [A-Za-z][A-Za-z0-9_ ]*，剔除 unsigned 等修饰词），
+        # 不直接 split 原始文本，避免把括号前的任意内容当作类型名带出去
+        return column_type_base(column_type)
 
     @classmethod
     def merge_same_imports(cls, imports: list[str], import_start: str) -> list[str]:
@@ -679,81 +911,39 @@ class Jinja2TemplateUtil:
 
     @classmethod
     def get_sqlalchemy_type(cls, column: Any) -> str:
-        """获取 SQLAlchemy 类型。
+        """获取 SQLAlchemy 类型（**代码位置** → 一律由常量白名单派生，见 template_safety）。
+
+        类型名只能来自 ``GenConstant.DB_TO_SQLALCHEMY`` 的值，长度/精度只能来自
+        ``column_length.isdigit()`` 或 ``column_type`` 括号内的**数字捕获**；
+        不再使用 ``column_type.split("(")[1]`` 这类字符串切分（会把任意内容带进产物）。
 
         参数:
         - column (Any): 列对象或列类型字符串。
 
         返回:
-        - str: SQLAlchemy 类型字符串。
+        - str: SQLAlchemy 类型字符串（如 ``String(64)`` / ``Numeric(10,2)`` / ``DateTime``）。
         """
-        # 获取column_type和column_length
-        column_type = column
-        column_length = None
-
-        # 检查是否是对象
+        column_type: Any = column
+        column_length: Any = None
         if hasattr(column, "column_type"):
-            column_type = column.column_type or ""
-            column_length = column.column_length or None
+            column_type = getattr(column, "column_type", "") or ""
+            column_length = getattr(column, "column_length", None) or None
 
+        # 先按既有口径去掉 COLLATE / UNSIGNED，便于与常量表的键匹配
         column_type = cls.normalize_db_column_type_for_mapping(column_type)
+        return pick_sqlalchemy_type(column_type, column_length)
 
-        # MySQL：仅 tinyint(1) 映射为 Boolean；其余 tinyint 走 SmallInteger（见 GenConstant.DB_TO_SQLALCHEMY）
-        ct_norm = (column_type or "").strip()
-        if settings.DATABASE_TYPE != "postgres" and ct_norm:
-            ct_lower = ct_norm.lower()
-            if ct_lower.startswith("tinyint(1)"):
-                return "Boolean"
 
-        # 首先尝试匹配完整类型（包括括号）
-        sqlalchemy_type = StringUtil.get_mapping_value_by_key_ignore_case(GenConstant.DB_TO_SQLALCHEMY, column_type)
+def _sentinelize_value(value: Any) -> Any:
+    """把非空文本替换为哨兵文本（空值/None 原样保留，避免改变模板的真值分支）。
 
-        # 特殊处理PostgreSQL类型
-        if settings.DATABASE_TYPE == "postgres":
-            if column_type.upper() == "BOOLEAN":
-                return "Boolean"
-            if column_type.upper() == "REAL" or column_type.upper() == "DOUBLE PRECISION":
-                return "Float"
-            if column_type.upper() == "TIMESTAMP":
-                return "DateTime"
-            if column_type.upper() == "JSONB":
-                return "JSONB"
-            if column_type.upper() == "UUID":
-                return "Uuid"
-            if column_type.upper() == "BYTEA":
-                return "LargeBinary"
+    参数:
+    - value (Any): 原始值。
 
-        # get_mapping_value_by_key_ignore_case 未命中时返回 ""，须与 None 同样视为未匹配
-        if not sqlalchemy_type and "(" in column_type:
-            # 如果没有匹配到，再尝试剥离括号
-            column_type_list = column_type.split("(")
-            col_type = column_type_list[0]
-            # 将 'character' 映射为 'char' 以匹配常量定义
-            if col_type.lower() == "character":
-                col_type = "char"
-            sqlalchemy_type = StringUtil.get_mapping_value_by_key_ignore_case(GenConstant.DB_TO_SQLALCHEMY, col_type)
-            # 如果是字符串类型且包含括号参数，保持原参数
-            if sqlalchemy_type in ["String", "CHAR"] or sqlalchemy_type in ["Numeric", "DECIMAL"]:
-                sqlalchemy_type += "(" + column_type_list[1]
-        elif not sqlalchemy_type:
-            # 处理没有括号的类型
-            col_type = column_type
-            # 将 'character' 映射为 'char' 以匹配常量定义
-            if col_type.lower() == "character":
-                col_type = "char"
-            sqlalchemy_type = StringUtil.get_mapping_value_by_key_ignore_case(GenConstant.DB_TO_SQLALCHEMY, col_type)
-            # 如果是字符串类型且没有指定长度，使用column_length或默认255
-            if sqlalchemy_type in ["String", "CHAR"]:
-                length = column_length if column_length and column_length.isdigit() else "255"
-                sqlalchemy_type += f"({length})"
-        # 对于已经匹配到的类型，如果是字符串类型且column有长度信息，添加长度
-        elif sqlalchemy_type in ["String", "CHAR"] and "(" not in sqlalchemy_type:
-            # 检查column_length是否有效
-            length = column_length if column_length and column_length.isdigit() else "255"
-            sqlalchemy_type += f"({length})"
-
-        # 如果没有找到匹配的类型，使用String(column_length)或String(255)作为默认类型
-        if not sqlalchemy_type:
-            length = column_length if column_length and column_length.isdigit() else "255"
-            sqlalchemy_type = f"String({length})"
-        return sqlalchemy_type
+    返回:
+    - Any: 哨兵文本或原值。
+    """
+    if value is None:
+        return None
+    text = str(value)
+    return SENTINEL_TEXT if text else text

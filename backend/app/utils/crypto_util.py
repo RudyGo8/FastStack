@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from app.config.setting import settings
-from app.core.exceptions import CustomException
+from app.core.logger import logger
 
 # HKDF 域分隔：与 SECRET_KEY 用于其它目的时派生出不同密钥
 _INFO = b"fastapiadmin:data-encryption:v1"
@@ -71,7 +71,8 @@ class CryptoUtil:
                 return fernet.decrypt(cipher.encode("utf-8")).decode("utf-8")
             except (InvalidToken, ValueError):
                 continue
-        raise CustomException(msg="敏感数据解密失败，可能原因：DATA_ENCRYPTION_KEY/SECRET_KEY 变更或数据损坏")
+        logger.error("敏感数据解密失败，可能原因：DATA_ENCRYPTION_KEY/SECRET_KEY 变更或数据损坏")
+        raise RuntimeError("敏感数据解密失败，可能原因：DATA_ENCRYPTION_KEY/SECRET_KEY 变更或数据损坏")
 
     @classmethod
     def decrypt_or_keep(cls, value: str | None) -> str:

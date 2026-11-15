@@ -1,0 +1,102 @@
+{
+  // 校准配置：让编辑器只报「真问题」，而不是基于默认推荐规则产生大量噪音。
+  // 背景：仓库此前没有 pyright/basedpyright 配置，basedpyright 使用自身默认
+  // （相当于 recommended），在 app/ 下产生 247 errors / 3799 warnings，其中
+  // 143 条是 reportMissingTypeArgument（未参数化泛型，如 Task / Result / ColumnElement），
+  // 属「注解完整度」而非缺陷，会掩盖 reportArgumentType / reportAttributeAccessIssue
+  // 这类能抓到真 bug 的规则（例如 OSS 的 Client.uploader 方法误用）。
+  "typeCheckingMode": "basic",
+  "pythonVersion": "3.12",
+  "venvPath": ".",
+  "venv": ".venv",
+  "include": ["app", "main.py", "tests"],
+  "exclude": ["**/__pycache__", ".venv", ".mypy_cache", ".ruff_cache", "alembic/versions"],
+
+  // tests/ 单独放宽：测试普遍用 SimpleNamespace 假对象、从 fixture 取 Optional 后直接使用，
+  // 这些由 pytest 运行期验证；对 app/ 的严格规则保持不变。
+  "executionEnvironments": [
+    {
+      "root": "tests",
+      "extraPaths": ["."],
+      "reportArgumentType": "none",
+      "reportCallIssue": "none",
+      "reportOptionalSubscript": "none",
+      "reportOptionalMemberAccess": "none",
+      "reportOperatorIssue": "none",
+      "reportUnusedCallResult": "none"
+    },
+    {
+      "root": "."
+    }
+  ],
+
+  // ── 保留为 error（能抓真缺陷，不允许降级）──
+  "reportAttributeAccessIssue": "error",
+  "reportArgumentType": "error",
+  "reportAssignmentType": "error",
+  "reportCallIssue": "error",
+  "reportReturnType": "error",
+  "reportGeneralTypeIssues": "error",
+  "reportOptionalMemberAccess": "error",
+  "reportOptionalCall": "error",
+  "reportOptionalSubscript": "error",
+  "reportOptionalIterable": "error",
+  "reportOptionalOperand": "error",
+  "reportIndexIssue": "error",
+  "reportOperatorIssue": "error",
+  "reportInvalidTypeArguments": "error",
+  "reportConstantRedefinition": "error",
+  "reportRedeclaration": "error",
+  "reportUndefinedVariable": "error",
+  "reportSelfClsParameterName": "error",
+  "reportInvalidStringEscapeSequence": "error",
+  "reportUnhashable": "error",
+  "reportInvalidCast": "error",
+  "reportAssertAlwaysTrue": "error",
+  "reportIncompatibleMethodOverride": "error",
+  "reportOverlappingOverload": "error",
+  "reportNoOverloadImplementation": "error",
+  "reportAbstractUsage": "error",
+  "reportMissingImports": "error",
+  "reportMissingModuleSource": "warning",
+
+  // SQLAlchemy 声明式模型的已知误报族：基类用 @declared_attr.directive 生成
+  // __tablename__/__table_args__（pyright 视作描述符/类变量），而各模型普遍用普通
+  // 类属性覆写（__tablename__: str = "sys_user"），pyright 判定为「实例变量覆写类变量」。
+  // 试过在基类 TYPE_CHECKING 里补 ClassVar 声明的正规解法：反而新增 reportRedeclaration
+  // 且错误数上升（62 → 90），故按社区通行做法关闭该规则。真实的方法覆写不兼容由
+  // reportIncompatibleMethodOverride（保持 error）兜底。
+  "reportIncompatibleVariableOverride": "none",
+  "reportUnboundVariable": "error",
+
+  // ── 降级为 none：注解完整度/风格类，属增量清理而非缺陷 ──
+  "reportMissingTypeArgument": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownParameterType": "none",
+  "reportUnknownLambdaType": "none",
+  "reportMissingParameterType": "none",
+  "reportUnannotatedClassAttribute": "none",
+  "reportImplicitOverride": "none",
+  "reportMissingTypeStubs": "none",
+  "reportAny": "none",
+  "reportExplicitAny": "none",
+  "reportUnusedCallResult": "none",
+  "reportUnusedImport": "none",
+  "reportPrivateImportUsage": "none",
+  "reportPrivateLocalImportUsage": "none",
+  "reportUnnecessaryComparison": "none",
+  "reportUnnecessaryIsInstance": "none",
+  "reportUnnecessaryCast": "none",
+  "reportUnusedParameter": "none",
+  "reportUnreachable": "none",
+  "reportImplicitStringConcatenation": "none",
+  "reportUnsafeMultipleInheritance": "none",
+  "reportDeprecated": "none",
+  "reportUnusedClass": "none",
+  "reportUnusedFunction": "none",
+  "reportUnusedVariable": "none",
+  "reportWildcardImportFromLibrary": "none",
+  "reportUnsupportedDunderAll": "none"
+}

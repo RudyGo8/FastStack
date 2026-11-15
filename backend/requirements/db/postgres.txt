@@ -1,0 +1,9 @@
+# ============================================================================
+# PostgreSQL 驱动（DATABASE_TYPE=postgres 时必需）
+#   asyncpg：异步驱动，对应 ASYNC_DB_URI（postgresql+asyncpg://）
+#   psycopg[binary]：同步驱动（含预编译 libpq），对应 DB_URI（postgresql+psycopg://）
+#   注意：psycopg[binary] 自带 libpq，无需在系统里额外安装 postgresql 客户端库
+# 用法：pip install -r requirements/base.txt -r requirements/db/postgres.txt
+# ============================================================================
+asyncpg==0.31.0                        # 异步驱动
+psycopg[binary]==3.3.2                 # 同步驱动

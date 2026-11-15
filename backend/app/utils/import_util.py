@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import inspect as sa_inspect
 
 from app.config.path_conf import BASE_DIR
-from app.core.exceptions import CustomException
+from app.core.logger import logger
 
 
 class ImportUtil:
@@ -153,8 +153,9 @@ class ImportUtil:
             except ImportError as e:
                 if "cannot import name" not in str(e):
                     raise ImportError(f"❗️ 警告: 无法导入模块 {module_name}: {e}")
-            except Exception as e:
-                raise CustomException(f"❌️ 处理模块 {module_name} 时出错: {e}")
+            except Exception:
+                logger.exception('处理模块失败')
+                raise
 
         # 查找apscheduler_jobs表的模型（如果存在）
         cls._find_apscheduler_model(base_class, models, seen_models, seen_tables)
@@ -204,5 +205,6 @@ class ImportUtil:
                             print(f"✅️ 找到有效模型: {obj.__module__}.{obj.__name__} (表: apscheduler_jobs)")
                 except ImportError:
                     pass
-        except Exception as e:
-            raise CustomException(f"❗️ 查找APScheduler模型时出错: {e}")
+        except Exception:
+            logger.exception('查找 APScheduler 模型失败')
+            raise

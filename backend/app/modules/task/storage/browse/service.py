@@ -246,6 +246,28 @@ class StorageFileService:
         finally:
             await adapter.close()
 
+    async def create_bucket(self, source_id: int | None, bucket: str) -> None:
+        """创建存储桶（仅对象存储协议）。
+
+        桶名只做与协议无关的通用校验（非空/长度/非法字符）；各协议的命名细则
+        （如 COS 的 ``-appid`` 后缀、S3 的区域约束）交给 SDK 报错。
+        """
+        name = (bucket or "").strip()
+        if not name:
+            raise CustomException(msg="桶名不能为空")
+        if len(name) > 63:
+            raise CustomException(msg="桶名长度不能超过 63 个字符")
+        if any(ch in name for ch in ("/", "\\", " ", "\t", "\n")):
+            raise CustomException(msg="桶名不能包含空格或斜杠")
+        config = await self._get_source(source_id)
+        if config.protocol not in _OBJECT_STORE_PROTOCOLS:
+            raise CustomException(msg="仅对象存储协议（S3/OSS/COS/OBS）支持创建桶")
+        adapter = StorageAdapterFactory.create(config)
+        try:
+            await adapter.create_bucket(name)
+        finally:
+            await adapter.close()
+
     async def copy_or_move(
         self,
         source_id: int | None,

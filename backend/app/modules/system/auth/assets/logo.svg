@@ -1,0 +1,14 @@
+<svg width="240" height="240" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="FastapiAdmin">
+  <defs>
+    <linearGradient id="fa-brand-v2" x1="18" y1="12" x2="224" y2="232" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F6BFF"/>
+      <stop offset="1" stop-color="#6D5BFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="240" height="240" rx="56" fill="url(#fa-brand-v2)"/>
+  <g fill="#FFFFFF">
+    <rect x="56" y="48" width="42" height="144" rx="12"/>
+    <path d="M68 48H190L168 69L190 90H68C61.373 90 56 84.627 56 78V60C56 53.373 61.373 48 68 48Z"/>
+    <path d="M68 112H156L140 130L156 148H68C61.373 148 56 142.627 56 136V124C56 117.373 61.373 112 68 112Z"/>
+  </g>
+</svg>

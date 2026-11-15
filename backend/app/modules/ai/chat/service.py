@@ -1,16 +1,18 @@
 import asyncio
 import json
+import time
 import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any
 
+import httpx
 from agno.run.team import TeamRunOutput
 from agno.session.team import TeamSession
 from redis.asyncio import Redis
 
-from app.common.enums import RedisInitKeyConfig
+from app.common.enums import RET, RedisInitKeyConfig
 from app.core.base_schema import AuthSchema, PageResultSchema
 from app.core.exceptions import CustomException
 from app.core.logger import logger
@@ -151,8 +153,9 @@ async def _ensure_session(crud: ChatSessionCRUD, session_id: str | None) -> str:
 class ChatService:
     """聊天会话管理模块服务层"""
 
-    def __init__(self, auth: AuthSchema) -> None:
+    def __init__(self, auth: AuthSchema, redis: Any | None = None) -> None:
         self.auth = auth
+        self.redis = redis
 
     async def chat_query(
         self,
@@ -166,12 +169,14 @@ class ChatService:
         session_id = await _ensure_session(crud, query.session_id)
 
         agno_factory = AgnoFactory()
+        tools = self._chat_tools(bool(query.use_tools))
         agent = agno_factory.create_agent(
             user_id=self.auth.user.username or "user",
             team_id=TEAM_ID,
             session_id=session_id,
             db=crud.db,
             model_config=model_config,
+            tools=tools,
         )
 
         message = (query.message or "").strip()
@@ -206,11 +211,20 @@ class ChatService:
 
         logger.info("流式生成结束: session_id={} chunk_count={}", session_id, chunk_count)
 
+    def _chat_tools(self, enabled: bool) -> list[Any]:
+        """按开关构造只读工具（关闭时返回空列表，零行为变化）。"""
+        if not enabled:
+            return []
+        from app.modules.ai.tools.registry import build_readonly_tools
+
+        return [spec.func for spec in build_readonly_tools(self.auth, self.redis)]
+
     async def chat_non_stream(
         self,
         message: str,
         session_id: str | None,
         model_config: dict[str, Any] | None = None,
+        use_tools: bool = False,
     ) -> dict[str, Any]:
         """非流式 AI 对话"""
         crud = ChatSessionCRUD(self.auth)
@@ -223,6 +237,7 @@ class ChatService:
             session_id=sid,
             db=crud.db,
             model_config=model_config,
+            tools=self._chat_tools(use_tools),
         )
 
         try:
@@ -277,7 +292,7 @@ class ChatService:
         crud = ChatSessionCRUD(self.auth)
         session = await crud.get_by_id(session_id=session_id)
         if not session:
-            raise CustomException(msg="会话不存在", code=10404, status_code=404)
+            raise CustomException(msg="会话不存在", code=RET.NOT_FOUND.code)
         return ChatSessionOutSchema.model_validate(_format_session_data(session))
 
     async def create(self, data: ChatSessionCreateSchema) -> ChatSessionOutSchema:
@@ -311,7 +326,7 @@ class ChatService:
     async def update(self, session_id: str, data: ChatSessionUpdateSchema) -> None:
         crud = ChatSessionCRUD(self.auth)
         if not await crud.get_by_id(session_id=session_id):
-            raise CustomException(msg="会话不存在", code=10404, status_code=404)
+            raise CustomException(msg="会话不存在", code=RET.NOT_FOUND.code)
         await crud.rename(session_id=session_id, data=data)
 
     async def delete(self, session_ids: list[str]) -> None:
@@ -320,7 +335,7 @@ class ChatService:
         crud = ChatSessionCRUD(self.auth)
         for session_id in session_ids:
             if not await crud.get_by_id(session_id=session_id):
-                raise CustomException(msg=f"会话不存在: {session_id}", code=10404, status_code=404)
+                raise CustomException(msg=f"会话不存在: {session_id}", code=RET.NOT_FOUND.code)
         await crud.delete(session_ids=session_ids)
 
 
@@ -518,15 +533,76 @@ class AiModelConfigService:
     async def update(self, config_id: str, config: AiModelConfigSchema) -> dict[str, Any]:
         result = await update_user_model_config(self.redis, self._user_id, config_id, config)
         if result is None:
-            raise CustomException(msg="模型配置不存在", code=10404, status_code=404)
+            raise CustomException(msg="模型配置不存在", code=RET.NOT_FOUND.code)
         return result
 
     async def delete(self, config_id: str) -> None:
         ok = await delete_user_model_config(self.redis, self._user_id, config_id)
         if not ok:
-            raise CustomException(msg="模型配置不存在", code=10404, status_code=404)
+            raise CustomException(msg="模型配置不存在", code=RET.NOT_FOUND.code)
 
     async def set_active(self, config_id: str) -> None:
         ok = await set_active_model_config(self.redis, self._user_id, config_id)
         if not ok:
-            raise CustomException(msg="模型配置不存在", code=10404, status_code=404)
+            raise CustomException(msg="模型配置不存在", code=RET.NOT_FOUND.code)
+
+
+# ── OpenAI 兼容接口探测：拉取模型列表 / 连通性测试（不落库）───────────────
+# 只用于「按填写中的接口与密钥」做即时探测，配置落库仍走上面的 AiModelConfigService。
+# 安全：base_url 已由 schema 校验为 http(s)；仅取结果的模型 id / owned_by，不回显密钥。
+
+_AI_PROBE_TIMEOUT = 20.0
+
+
+def _ai_auth_headers(api_key: str) -> dict[str, str]:
+    """构造 Bearer 鉴权头（密钥只放进请求头，不落日志）。"""
+    return {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+
+
+async def probe_available_models(base_url: str, api_key: str) -> list[dict[str, Any]]:
+    """拉取接口可用的模型列表（GET {base_url}/models）。
+
+    返回:
+    - list[dict[str, Any]]: [{id, owned_by}]
+
+    异常:
+    - CustomException: 接口不可达或返回非 2xx
+    """
+    url = f"{base_url.rstrip('/')}/models"
+    try:
+        async with httpx.AsyncClient(timeout=_AI_PROBE_TIMEOUT) as client:
+            response = await client.get(url, headers=_ai_auth_headers(api_key))
+    except httpx.HTTPError as e:
+        raise CustomException(msg=f"请求模型列表失败: {type(e).__name__}") from e
+    if response.status_code >= 400:
+        raise CustomException(msg=f"请求模型列表失败: HTTP {response.status_code}")
+    payload: dict[str, Any] = response.json() or {}
+    items = payload.get("data") or []
+    return [
+        {"id": str(item.get("id")), "owned_by": item.get("owned_by")}
+        for item in items
+        if isinstance(item, dict) and item.get("id")
+    ]
+
+
+async def probe_model_connection(base_url: str, api_key: str, model_id: str) -> dict[str, Any]:
+    """连通性测试：发一次最小 chat/completions 请求（max_tokens=1）。
+
+    返回:
+    - dict[str, Any]: {ok, model_id, latency_ms}
+
+    异常:
+    - CustomException: 接口不可达或返回非 2xx
+    """
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    body = {"model": model_id, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1}
+    started = time.perf_counter()
+    try:
+        async with httpx.AsyncClient(timeout=_AI_PROBE_TIMEOUT) as client:
+            response = await client.post(url, headers=_ai_auth_headers(api_key), json=body)
+    except httpx.HTTPError as e:
+        raise CustomException(msg=f"连通性测试失败: {type(e).__name__}") from e
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    if response.status_code >= 400:
+        raise CustomException(msg=f"连通性测试失败: HTTP {response.status_code}")
+    return {"ok": True, "model_id": model_id, "latency_ms": latency_ms}

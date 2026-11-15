@@ -10,9 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, load_only, selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.common.enums import RET
 from app.core.base_model import ModelMixin
 from app.core.base_schema import AuthSchema, PageResultSchema
 from app.core.exceptions import CustomException
+from app.core.logger import logger
 
 OutSchemaType = TypeVar("OutSchemaType", bound=BaseModel)
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
@@ -77,8 +79,9 @@ class CRUDBase[ModelType: ModelMixin, CreateSchemaType, UpdateSchemaType]:
                 sql = sql.options(opt)
             result: Result = await self.db.execute(sql)
             return result.scalars().first()
-        except Exception as e:
-            raise CustomException(msg=f"获取查询失败: {e!s}") from e
+        except Exception:
+            logger.exception('获取查询失败')
+            raise
 
     async def get_or_404(
         self,
@@ -89,12 +92,15 @@ class CRUDBase[ModelType: ModelMixin, CreateSchemaType, UpdateSchemaType]:
         include_deleted: bool = False,
         **kwargs,
     ) -> ModelType | OutSchemaType:
-        """查不到直接抛异常。支持 id 快捷入参，也支持 **kwargs 传多个条件。"""
+        """查不到直接抛异常。支持 id 快捷入参，也支持 **kwargs 传多个条件。
+
+        「资源不存在」属客户端可修正的结果：按 404 返回（业务 code 保持默认，前端仍展示 msg）。
+        """
         if id is not None:
             kwargs["id"] = id
         obj = await self.get(preload=preload, include_deleted=include_deleted, **kwargs)
         if not obj:
-            raise CustomException(msg=msg)
+            raise CustomException(msg=msg, code=RET.NOT_FOUND.code)
         return out_schema.model_validate(obj) if out_schema else obj
 
     async def exists(self, include_deleted: bool = False, **kwargs) -> bool:
@@ -108,8 +114,9 @@ class CRUDBase[ModelType: ModelMixin, CreateSchemaType, UpdateSchemaType]:
             count_sql = select(func.count()).select_from(self.model).where(*conditions)
             result: Result = await self.db.execute(count_sql)
             return result.scalar() or 0
-        except Exception as e:
-            raise CustomException(msg=f"统计失败: {e!s}") from e
+        except Exception:
+            logger.exception('统计失败')
+            raise
 
     async def get_list(
         self,
@@ -130,8 +137,9 @@ class CRUDBase[ModelType: ModelMixin, CreateSchemaType, UpdateSchemaType]:
                 sql = sql.options(opt)
             result: Result = await self.db.execute(sql)
             return result.scalars().all()
-        except Exception as e:
-            raise CustomException(msg=f"列表查询失败: {e!s}") from e
+        except Exception:
+            logger.exception('列表查询失败')
+            raise
 
     async def page(
         self,
@@ -178,8 +186,9 @@ class CRUDBase[ModelType: ModelMixin, CreateSchemaType, UpdateSchemaType]:
                 has_next=offset + limit < total,
                 items=items,
             )
-        except Exception as e:
-            raise CustomException(msg=f"分页查询失败: {e!s}") from e
+        except Exception:
+            logger.exception('分页查询失败')
+            raise
 
     # ── 写入 ──────────────────────────────────────────────────────────
 
@@ -214,13 +223,14 @@ class CRUDBase[ModelType: ModelMixin, CreateSchemaType, UpdateSchemaType]:
                 obj = result.scalar_one()
 
             return obj
-        except Exception as e:
-            raise CustomException(msg=f"创建失败: {e!s}") from e
+        except Exception:
+            logger.exception('创建失败')
+            raise
 
     async def update(self, id: int, data: UpdateSchemaType | dict[str, Any]) -> ModelType:
-        """更新记录。用 exclude_unset / exclude_none 准确表达前端意图。"""
+        """更新记录。exclude_unset 只排除未提交字段，显式 null 必须保留以清空字段。"""
         try:
-            obj_dict = data.model_dump(exclude_unset=True, exclude_none=True, exclude={"id"}) if isinstance(data, BaseModel) else cast("dict[str, Any]", data)
+            obj_dict = data.model_dump(exclude_unset=True, exclude={"id"}) if isinstance(data, BaseModel) else cast("dict[str, Any]", data)
             obj = await self.get(id=id)
             if not obj:
                 raise CustomException(msg="更新对象不存在")
@@ -252,8 +262,9 @@ class CRUDBase[ModelType: ModelMixin, CreateSchemaType, UpdateSchemaType]:
             return obj
         except CustomException:
             raise
-        except Exception as e:
-            raise CustomException(msg=f"更新失败: {e!s}") from e
+        except Exception:
+            logger.exception('更新失败')
+            raise
 
     async def delete(self, ids: list[int]) -> None:
         """软删除优先，无软删除则物理删除。"""
@@ -268,8 +279,9 @@ class CRUDBase[ModelType: ModelMixin, CreateSchemaType, UpdateSchemaType]:
                 sql = delete(self.model).where(pk.in_(ids))
             await self.db.execute(sql)
             await self.db.flush()
-        except Exception as e:
-            raise CustomException(msg=f"删除失败: {e!s}") from e
+        except Exception:
+            logger.exception('删除失败')
+            raise
 
     async def clear(self) -> None:
         """清空整表。软删除模式下相当于"回收站清空"，只清理已删标记的记录。"""
@@ -282,8 +294,9 @@ class CRUDBase[ModelType: ModelMixin, CreateSchemaType, UpdateSchemaType]:
                 sql = delete(self.model)
             await self.db.execute(sql)
             await self.db.flush()
-        except Exception as e:
-            raise CustomException(msg=f"清空失败: {e!s}") from e
+        except Exception:
+            logger.exception('清空失败')
+            raise
 
     async def set(self, ids: list[int], include_deleted: bool = False, **kwargs) -> None:
         """批量更新。软删除模式下默认跳过已删除的记录。"""
@@ -295,8 +308,9 @@ class CRUDBase[ModelType: ModelMixin, CreateSchemaType, UpdateSchemaType]:
             sql = sql.values(**kwargs)
             await self.db.execute(sql)
             await self.db.flush()
-        except Exception as e:
-            raise CustomException(msg=f"批量更新失败: {e!s}") from e
+        except Exception:
+            logger.exception('批量更新失败')
+            raise
 
     # ── 条件与排序 ────────────────────────────────────────────────────
 

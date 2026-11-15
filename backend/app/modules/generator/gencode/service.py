@@ -1,5 +1,6 @@
 import io
 import os
+import uuid
 import re
 import zipfile
 from collections.abc import Callable
@@ -33,7 +34,7 @@ from app.utils.common_util import CamelCaseUtil, compute_menu_route_first_segmen
 
 from .crud import GenTableColumnCRUD, GenTableCRUD
 from .gen_util import GenUtils
-from .jinja2_template_util import Jinja2TemplateUtil
+from .jinja2_template_util import SENTINEL_TEXT, Jinja2TemplateUtil
 from .schema import (
     GenSyncColumnChange,
     GenSyncPreviewSchema,
@@ -43,6 +44,7 @@ from .schema import (
     GenTableQueryParam,
     GenTableSchema,
 )
+from .template_safety import assert_python_structure, assert_text_structure
 
 
 def handle_service_exception(func: Callable) -> Callable:
@@ -60,8 +62,11 @@ def handle_service_exception(func: Callable) -> Callable:
             return await func(*args, **kwargs)
         except CustomException:
             raise
-        except Exception as e:
-            raise CustomException(msg=f"{func.__name__}执行失败: {e!s}")
+        except Exception:
+            # 服务层公共出口：这里捕获到的都是**非业务**异常（模板渲染/DB/反射等内部故障），
+            # 记日志后原样抛出让全局异常处理器统一映射为 5xx；业务异常由上面的分支原样透传（保留自身 4xx）
+            logger.exception(f"{func.__name__}执行失败")
+            raise
 
     return wrapper
 
@@ -369,8 +374,9 @@ class GenTableService:
             return True
         except CustomException:
             raise
-        except Exception as e:
-            raise CustomException(msg=f"导入失败, {e!s}")
+        except Exception:
+            logger.exception('导入业务表信息失败')
+            raise
 
     @handle_service_exception
     async def create_table(self, sql: str) -> bool | None:
@@ -453,8 +459,9 @@ class GenTableService:
 
         except CustomException:
             raise
-        except Exception as e:
-            raise CustomException(msg=f"创建表结构失败: {e!s}")
+        except Exception:
+            logger.exception('创建表结构失败')
+            raise
 
     @handle_service_exception
     async def update_gen_table(self, data: GenTableSchema, table_id: int) -> GenTableOutSchema:
@@ -496,7 +503,7 @@ class GenTableService:
                             # 新增列：前端新增但库中无对应记录
                             column_schema = GenTableColumnSchema(
                                 table_id=table_id,
-                                **gen_table_column.model_dump(exclude={"id", "super_column"}),
+                                **gen_table_column.model_dump(exclude={"id", "super_column", "table_id"}),
                             )
                             GenUtils.init_column_field(column_schema, gen_table_info)
                             await GenTableColumnCRUD(self.auth, self.db).create_gen_table_column_crud(column_schema)
@@ -515,8 +522,9 @@ class GenTableService:
                 return out
             except CustomException:
                 raise
-            except Exception as e:
-                raise CustomException(msg=str(e))
+            except Exception:
+                logger.exception('更新业务表信息失败')
+                raise
         else:
             raise CustomException(msg="业务表不存在")
 
@@ -540,8 +548,9 @@ class GenTableService:
             await GenTableColumnCRUD(self.auth, self.db).delete_gen_table_column_by_table_id_crud(ids)
             # 再删除表信息
             await GenTableCRUD(self.auth, self.db).delete_gen_table(ids)
-        except Exception as e:
-            raise CustomException(msg=str(e))
+        except Exception:
+            logger.exception('删除业务表信息失败')
+            raise
 
     @handle_service_exception
     async def get_gen_table_by_id(self, table_id: int) -> GenTableOutSchema:
@@ -618,6 +627,33 @@ class GenTableService:
                     preview_code_result[out_key] = f"渲染错误: {e!s}"
         return preview_code_result
 
+    async def _write_plugin_migration(self, gen_table_schema: GenTableOutSchema) -> None:
+        """为生成的插件写一个受控的空迁移，避免 dev 自动迁移产生多 head。
+
+        生成的插件模型映射的是**已经存在的物理表**，因此不能在这里 create_table/alter；
+        迁移只负责把插件纳入 Alembic 版本链，实际的表结构由原库维护。
+        """
+        from alembic import command
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+
+        alembic_cfg = Config(str(BASE_DIR / "alembic.ini"))
+        script = ScriptDirectory.from_config(alembic_cfg)
+        heads = script.get_heads()
+        if len(heads) > 1:
+            raise CustomException(msg="迁移存在多个 head，无法为生成插件创建受控迁移")
+        down_revision = heads[0] if heads else None
+        table_name = (gen_table_schema.table_name or "").strip()
+        rev_id = f"gen_{table_name}_{uuid.uuid4().hex[:8]}"[:32]
+        command.revision(
+            alembic_cfg,
+            message=f"codegen plugin {table_name}",
+            head=down_revision,
+            rev_id=rev_id,
+            autogenerate=False,
+        )
+        logger.info(f"代码生成：已创建插件受控迁移 {rev_id}")
+
     @handle_service_exception
     async def generate_code(self, table_name: str) -> bool:
         """生成代码至指定路径（安全写入+可跳过覆盖）。
@@ -660,12 +696,40 @@ class GenTableService:
             raise CustomException(msg="包名不能为空")
 
         # 1. 先写代码文件（风险最高，放最前，失败不产生菜单孤儿数据）
-        async def _write_templates(templates: list[str], ctx: dict[str, Any], table_schema: GenTableOutSchema) -> None:
+        repo_root = BASE_DIR.parent.resolve()
+
+        async def _write_templates(
+            templates: list[str],
+            ctx: dict[str, Any],
+            table_schema: GenTableOutSchema,
+            *,
+            reference_ctx: dict[str, Any],
+            dynamic_values: list[str],
+        ) -> None:
             for template in templates:
                 try:
-                    render_content = await env.get_template(template).render_async(**ctx)
+                    tmpl = env.get_template(template)
+                    render_content = await tmpl.render_async(**ctx)
+                    # 同一模板用「哨兵值」再渲染一次，得到该模板的规范结构骨架
+                    reference_content = await tmpl.render_async(**reference_ctx)
                     file_name = Jinja2TemplateUtil.get_file_name(template, table_schema)
                     full_path = BASE_DIR.parent.joinpath(file_name)
+                    # 落盘前三重校验（详见 gencode/template_safety.py）：
+                    # ① 目标路径必须仍在仓库根内，防止路径穿越改写仓库外的文件；
+                    # ② .py 产物必须语法合法，且**结构与哨兵骨架一致**（仅 ast.parse 发现不了注入）；
+                    # ③ .vue/.ts/.toml 退化为行结构比对，禁止出现骨架之外的语句/标签结构。
+                    if not full_path.resolve().is_relative_to(repo_root):
+                        raise CustomException(msg=f"生成路径越出仓库范围，已拒绝写入：{file_name}")
+                    if file_name.endswith(".py"):
+                        assert_python_structure(render_content, reference_content, filename=file_name)
+                    else:
+                        assert_text_structure(
+                            render_content,
+                            reference_content,
+                            sentinel=SENTINEL_TEXT,
+                            dynamic_values=dynamic_values,
+                            filename=file_name,
+                        )
                     gen_path = str(full_path)
                     os.makedirs(os.path.dirname(gen_path), exist_ok=True)
                     await anyio.Path(gen_path).write_text(render_content, encoding="utf-8")
@@ -680,17 +744,35 @@ class GenTableService:
                             if not init_path.exists():
                                 os.makedirs(str(d), exist_ok=True)
                                 await anyio.Path(str(init_path)).write_text("# -*- coding: utf-8 -*-", encoding="utf-8")
-                except Exception as e:
-                    raise CustomException(msg=f"渲染模板失败，表名：{table_schema.table_name}，详细错误信息：{e!s}")
+                except Exception:
+                    logger.exception(f"渲染模板失败，表名：{table_schema.table_name}")
+                    raise
 
-        await _write_templates(render_info[0], render_info[2], gen_table_schema)
+        safe_schema: GenTableOutSchema = render_info[4]
+        reference_ctx = Jinja2TemplateUtil.prepare_context(Jinja2TemplateUtil.sentinel_render_schema(safe_schema))
+        dynamic_values = Jinja2TemplateUtil.iter_render_dynamic_values(safe_schema)
+        await _write_templates(render_info[0], render_info[2], gen_table_schema, reference_ctx=reference_ctx, dynamic_values=dynamic_values)
         if gen_table_schema.sub and gen_table_schema.sub_table:
             gen_table_schema.sub_table.package_name = gen_table_schema.package_name
             if not (gen_table_schema.sub_table.module_name or "").strip():
                 gen_table_schema.sub_table.module_name = gen_table_schema.module_name
             sub_ctx = Jinja2TemplateUtil.prepare_sub_render_context(gen_table_schema, gen_table_schema.sub_table)
             sub_templates = Jinja2TemplateUtil.get_sub_table_template_list()
-            await _write_templates(sub_templates, sub_ctx, gen_table_schema.sub_table)
+            safe_sub = Jinja2TemplateUtil.safe_render_schema(gen_table_schema.sub_table)
+            sub_reference_ctx = Jinja2TemplateUtil.prepare_sub_render_context(
+                Jinja2TemplateUtil.sentinel_render_schema(safe_schema),
+                Jinja2TemplateUtil.sentinel_render_schema(safe_sub),
+            )
+            await _write_templates(
+                sub_templates,
+                sub_ctx,
+                gen_table_schema.sub_table,
+                reference_ctx=sub_reference_ctx,
+                dynamic_values=dynamic_values,
+            )
+
+        # 生成插件的迁移由这里统一控制；不能让 dev 自动 autogenerate 再生成一份
+        await self._write_plugin_migration(gen_table_schema)
 
         # 2. 代码成功写入后，再创建菜单（避免失败时产生孤儿菜单数据）
         menu_crud = MenuCRUD(self.auth, self.db)
@@ -901,6 +983,10 @@ class GenTableService:
         if not table.id:
             raise CustomException(msg="业务表ID不能为空")
         table_columns = table.columns or []
+        if not table_columns:
+            # 预加载缺失时的兜底：直接按 table_id 读现有字段，避免重复同步时重复插入
+            existing_columns = await GenTableColumnCRUD(self.auth, self.db).list_gen_table_column_crud(search={"table_id": table.id})
+            table_columns = [GenTableColumnOutSchema.model_validate(column) for column in existing_columns]
         table_column_map = {column.column_name: column for column in table_columns}
         # 确保db_table_columns始终是列表类型，避免None值
         db_table_columns = await self._get_db_table_columns(table_name)
@@ -969,8 +1055,9 @@ class GenTableService:
                 sub_cfg = await GenTableCRUD(self.auth, self.db).get_gen_table_by_name(sn)
                 if sub_cfg:
                     await self.sync_db(sn, _sync_sub=False)
-        except Exception as e:
-            raise CustomException(msg=f"同步失败: {e!s}")
+        except Exception:
+            logger.exception('同步失败')
+            raise
 
     async def hydrate_sub_table(self, gen_table: GenTableOutSchema) -> None:
         """主子表：优先使用已导入的子表配置，否则回退为只读 DB 结构。
@@ -1247,6 +1334,8 @@ class GenTableService:
         await self.hydrate_sub_table(gen_table)
         self._assert_master_sub_config_valid(gen_table)
         context = Jinja2TemplateUtil.prepare_context(gen_table)
+        # 安全副本：与 prepare_context 内部使用同一函数得到，专门供「落盘前结构闸门」派生哨兵骨架与真实值集合
+        safe_table = Jinja2TemplateUtil.safe_render_schema(gen_table)
         template_list = Jinja2TemplateUtil.get_template_list()
         output_files = [Jinja2TemplateUtil.get_file_name(template, gen_table) for template in template_list]
-        return [template_list, output_files, context, gen_table]
+        return [template_list, output_files, context, gen_table, safe_table]

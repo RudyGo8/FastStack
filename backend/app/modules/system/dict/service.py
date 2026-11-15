@@ -106,6 +106,9 @@ class DictTypeService:
         exist_obj = await DictTypeCRUD(self.auth, self.db).get(dict_name=data.dict_name)
         if exist_obj:
             raise CustomException(msg="创建失败，该数据已存在")
+        exist_code = await DictTypeCRUD(self.auth, self.db).get(dict_type=data.dict_type)
+        if exist_code:
+            raise CustomException(msg="创建失败，字典编码已存在")
         obj = await DictTypeCRUD(self.auth, self.db).create(data=data)
 
         new_obj_dict = DictTypeOutSchema.model_validate(obj)
@@ -121,7 +124,7 @@ class DictTypeService:
             logger.info(f"创建字典类型成功: {new_obj_dict}")
         except Exception as e:
             logger.error(f"创建字典类型失败: {e}")
-            raise CustomException(msg="同步字典类型缓存失败") from e
+            raise
 
         return new_obj_dict
 
@@ -176,7 +179,7 @@ class DictTypeService:
             logger.info(f"更新字典类型成功并刷新缓存: {new_obj_dict}")
         except Exception as e:
             logger.error(f"更新字典类型缓存失败: {e}")
-            raise CustomException(msg="同步字典类型缓存失败") from e
+            raise
 
         return new_obj_dict
 
@@ -215,7 +218,7 @@ class DictTypeService:
                 logger.info(f"删除字典类型缓存: {dt}")
             except Exception as e:
                 logger.error(f"删除字典类型缓存失败: {e}")
-                raise CustomException(msg="同步删除字典缓存失败") from e
+                raise
         await DictTypeCRUD(self.auth, self.db).delete(ids=ids)
 
     async def set_available(self, data: BatchSetAvailable) -> None:
@@ -330,7 +333,7 @@ class DictDataService:
 
         except Exception as e:
             logger.error(f"❌️ 字典初始化过程发生错误: {e}")
-            raise CustomException(msg="字典数据初始化失败") from e
+            raise
 
     @staticmethod
     async def get_init_cache(redis: Redis, dict_type: str) -> list[dict]:
@@ -376,7 +379,7 @@ class DictDataService:
             raise
         except Exception as e:
             logger.error(f"获取字典缓存失败: {e!s}")
-            raise CustomException(msg="获取字典数据失败") from e
+            raise
 
     async def _refresh_dict_cache(self, redis: Redis, dict_type: str) -> None:
         """刷新指定字典类型的 Redis 缓存
@@ -420,7 +423,7 @@ class DictDataService:
             logger.info(f"创建字典数据写入缓存成功: {obj}")
         except Exception as e:
             logger.error(f"创建字典数据写入缓存失败: {e}")
-            raise CustomException(msg="同步字典数据缓存失败") from e
+            raise
 
         return DictDataOutSchema.model_validate(obj)
 
@@ -462,7 +465,7 @@ class DictDataService:
                     await self._refresh_dict_cache(redis, dict_type.dict_type)
                 except Exception as e:
                     logger.error(f"刷新旧字典缓存失败: {e}")
-                    raise CustomException(msg="同步旧字典数据缓存失败") from e
+                    raise
 
         obj = await DictDataCRUD(self.auth, self.db).update(id=id, data=data)
 
@@ -472,7 +475,7 @@ class DictDataService:
             logger.info(f"更新字典数据写入缓存成功: {obj}")
         except Exception as e:
             logger.error(f"更新字典数据写入缓存失败: {e}")
-            raise CustomException(msg="同步字典数据缓存失败") from e
+            raise
 
         return DictDataOutSchema.model_validate(obj)
 
@@ -504,7 +507,7 @@ class DictDataService:
                 logger.info(f"删除字典数据并刷新缓存: dict_type={dt}")
             except Exception as e:
                 logger.error(f"删除字典数据刷新缓存失败: {e}")
-                raise CustomException(msg="同步删除字典数据缓存失败") from e
+                raise
         await DictDataCRUD(self.auth, self.db).delete(ids=ids)
 
     async def set_available(self, data: BatchSetAvailable) -> None:

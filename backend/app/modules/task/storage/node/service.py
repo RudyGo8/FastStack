@@ -15,6 +15,7 @@ from app.modules.task.storage.core.base import (
 from app.modules.task.storage.core.factory import StorageAdapterFactory
 from app.utils.common_util import search_to_dict
 
+from .config_io import build_export, plan_import
 from .crud import StorageNodeCRUD
 from .model import StorageNodeModel
 from .schema import StorageNodeCreateSchema, StorageNodeOutSchema, StorageNodeQueryParam, StorageNodeTestSchema, StorageNodeUpdateSchema
@@ -75,6 +76,21 @@ class StorageNodeService:
         return StorageNodeService._build_config_from(obj, decrypt_password(obj.password))
 
     # ── 查询 ────────────────────────────────────────────────────────
+
+    async def export_config(self) -> dict[str, Any]:
+        """导出全部存储源配置（不含凭据，可直接传阅）。"""
+        nodes = await self._crud().get_list()
+        return build_export(list(nodes))
+
+    async def import_config(self, data: dict[str, Any]) -> dict[str, int]:
+        """按名称去重导入存储源配置（不含凭据；已存在则跳过，绝不覆盖现有配置）。"""
+        existing = {node.name for node in await self._crud().get_list()}
+        to_create, skipped, invalid = plan_import(data, existing)
+        created = 0
+        for payload in to_create:
+            await self._crud().create(data=payload)
+            created += 1
+        return {"created": created, "skipped": skipped, "invalid": invalid}
 
     async def detail(self, id: int) -> StorageNodeOutSchema:
         obj = await self._crud().get_or_404(id=id)

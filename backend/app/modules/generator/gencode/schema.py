@@ -4,6 +4,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.base_schema import BaseQueryParam, BaseSchema, UserByQueryParam, UserBySchema
 
+from .template_safety import is_safe_identifier, is_valid_column_type, normalize_column_type, reserved_word_reason
+
 
 class GenDBTableSchema(BaseModel):
     """数据库中的表信息（跨方言统一结构）。
@@ -58,6 +60,71 @@ class GenTableColumnSchema(BaseModel):
     )
     dict_type: str | None = Field(default="", description="字典类型")
     sort: int = Field(default=0, description="排序")
+
+    @field_validator("column_name", mode="before")
+    @classmethod
+    def validate_column_name(cls, v: str | None) -> str:
+        """列名白名单校验：必须能直接充当 Python / JS 标识符。
+
+        列名会被原样写进 ``Mapped[..]`` 属性名、``class`` 字段名与前端 ``prop``，
+        是注入面之一（见 backend/audit-backend.md B1）。非法名（含引号/空格/换行/数字开头等）
+        在此直接拒绝，避免生成出语法不合法或可被注入的代码。
+
+        参数:
+        - v (str | None): 原始列名。
+
+        返回:
+        - str: 去空白后的合法列名；未填写时返回空串（沿用历史行为）。
+
+        异常:
+        - ValueError: 列名不是合法标识符时抛出。
+        """
+        if v is None:
+            return ""
+        text = str(v).strip()
+        if not text:
+            return ""
+        if not is_safe_identifier(text):
+            reason = reserved_word_reason(text)
+            if reason:
+                raise ValueError(
+                    f"列名 {text!r} 是 {reason}，作为字段名会生成非法代码（如 class: Mapped[...]），"
+                    f"请改名后再导入/保存（可改为 {text}_ 之类）",
+                )
+            raise ValueError(f"列名 {text!r} 不是合法的标识符（仅允许字母/数字/下划线，且不能以数字开头），代码生成器无法为它生成合法代码，请先改名")
+        return text
+
+    @field_validator("column_type", mode="before")
+    @classmethod
+    def validate_column_type(cls, v: str | None) -> str:
+        """列类型形状白名单校验（结构化，非法即拒绝）。
+
+        允许的形状：``基名`` + 可选 ``(数字)`` / ``(数字,数字)`` + 可选 ``[]`` + 可选 ``unsigned``。
+        MySQL 的 ``enum(...)``/``set(...)`` 会先归一化为基名 ``enum``/``set``（其成员列表既无用途也含引号）。
+
+        为什么必须校验：列类型会参与「代码位置」派生（SQLAlchemy 类型名 + 长度/精度），
+        任意文本一旦被拼接进生成代码就等于注入面（见 backend/audit-backend.md B1）。
+
+        参数:
+        - v (str | None): 原始列类型。
+
+        返回:
+        - str: 归一化后的列类型；未填写时返回空串（由 SQLAlchemy 映射回落 String）。
+
+        异常:
+        - ValueError: 形状非法时抛出（报错带上列类型原文）。
+        """
+        if v is None:
+            return ""
+        text = str(v).strip()
+        if not text:
+            return ""
+        if not is_valid_column_type(text):
+            raise ValueError(
+                f"列类型 {text!r} 形状非法：仅允许「类型名 + 可选(长度[,精度]) + 可选[] + 可选 unsigned」，例如 varchar(64)、decimal(10,2)、tinyint(1) unsigned；"
+                "含引号/分号/括号内非数字等内容会被拒绝（代码生成器不接收自由文本类型）",
+            )
+        return normalize_column_type(text)
 
 
 class GenTableColumnOutSchema(GenTableColumnSchema, BaseSchema):

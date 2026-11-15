@@ -26,6 +26,7 @@ class AgnoFactory:
         session_id: str,
         db: Any | None = None,
         model_config: dict[str, Any] | None = None,
+        tools: list[Any] | None = None,
     ) -> Team:
         """创建带 Agent 的 Team 实例。
 
@@ -36,6 +37,7 @@ class AgnoFactory:
         - db (Any | None): Agno 持久化数据库实例，可选。
         - model_config (dict | None): 运行时模型配置，覆盖系统默认。
             支持字段：base_url, api_key, model_id, temperature。
+        - tools (list[Any] | None): 需要注入给 Agent 的工具（**只读工具**，由调用方按开关决定）。
 
         返回:
         - Team: 配置好的 Team。
@@ -59,7 +61,7 @@ class AgnoFactory:
             name="fastapiadmin_agent",
             role="You are a helpful AI assistant",
             description=self.AGENT_DESCRIPTION,
-            tools=[],
+            tools=list(tools or []),
         )
 
         # 创建 Team

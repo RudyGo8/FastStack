@@ -5,15 +5,23 @@
 同步操作经基类 asyncio.to_thread 包装，不阻塞事件循环。
 用完由调用方调用 close() 释放连接。
 """
+
+from __future__ import annotations
+
 import os
 import stat
 from datetime import UTC, datetime
-
-import paramiko
+from typing import TYPE_CHECKING
 
 from app.core.exceptions import CustomException
 from app.core.logger import logger
 from app.modules.task.storage.core.base import BaseStorageAdapter, SftpAdvancedConfig, StorageObject, StorageProtocol
+from app.utils.lazy_sdk import lazy_module
+
+if TYPE_CHECKING:
+    import paramiko
+else:
+    paramiko = lazy_module("paramiko")
 
 
 class SftpStorageAdapter(BaseStorageAdapter):
@@ -36,8 +44,8 @@ class SftpStorageAdapter(BaseStorageAdapter):
         """建立并复用 SFTP 连接：首次使用时连接，之后直接复用。"""
         if self._sftp is not None:
             return self._sftp
-        if not self.config.username or not self.config.password:
-            raise CustomException(msg="SFTP 存储源必须配置用户名与密码")
+        if not self.config.host or not self.config.username or not self.config.password:
+            raise CustomException(msg="SFTP 存储源必须配置主机、用户名与密码")
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
@@ -117,8 +125,9 @@ class SftpStorageAdapter(BaseStorageAdapter):
             if dir_part:
                 self._ensure_remote_dir(client, dir_part)
             client.put(local_path, remote_path)
-        except Exception as e:
-            raise CustomException(msg=f"SFTP 上传失败: {e!s}")
+        except Exception:
+            logger.exception('SFTP 上传失败')
+            raise
         return remote_path
 
     def _sync_download(self, remote_path: str, local_path: str) -> str:
@@ -140,15 +149,17 @@ class SftpStorageAdapter(BaseStorageAdapter):
                         lf.write(chunk)
             else:
                 client.get(remote_path, local_path)
-        except Exception as e:
-            raise CustomException(msg=f"SFTP 下载失败: {e!s}")
+        except Exception:
+            logger.exception('SFTP 下载失败')
+            raise
         return local_path
 
     def _sync_delete(self, remote_path: str) -> None:
         try:
             self._connect().remove(remote_path)
-        except Exception as e:
-            raise CustomException(msg=f"SFTP 删除失败: {e!s}")
+        except Exception:
+            logger.exception('SFTP 删除失败')
+            raise
 
     def _sync_exists(self, remote_path: str) -> bool:
         try:
@@ -161,8 +172,9 @@ class SftpStorageAdapter(BaseStorageAdapter):
         try:
             # 空 prefix 表示浏览根目录：SFTP 用 "." 表示登录后的当前目录
             attrs = self._connect().listdir_attr(prefix or ".")
-        except Exception as e:
-            raise CustomException(msg=f"SFTP 列表失败: {e!s}")
+        except Exception:
+            logger.exception('SFTP 列表失败')
+            raise
         result: list[StorageObject] = []
         for attr in attrs:
             result.append(
@@ -188,20 +200,23 @@ class SftpStorageAdapter(BaseStorageAdapter):
     def _sync_mkdir(self, remote_dir: str) -> None:
         try:
             self._ensure_remote_dir(self._connect(), remote_dir)
-        except Exception as e:
-            raise CustomException(msg=f"SFTP 创建目录失败: {e!s}")
+        except Exception:
+            logger.exception('SFTP 创建目录失败')
+            raise
 
     def _sync_rmdir(self, remote_dir: str) -> None:
         try:
             self._connect().rmdir(remote_dir)
-        except Exception as e:
-            raise CustomException(msg=f"SFTP 删除目录失败: {e!s}")
+        except Exception:
+            logger.exception('SFTP 删除目录失败')
+            raise
 
     def _sync_rename(self, src: str, dst: str) -> None:
         try:
             self._connect().posix_rename(src, dst)
-        except Exception as e:
-            raise CustomException(msg=f"SFTP 重命名失败: {e!s}")
+        except Exception:
+            logger.exception('SFTP 重命名失败')
+            raise
 
     def _sync_copy(self, src: str, dst: str) -> None:
         """复制：目录走基类递归实现；文件用通道流式复制（SFTP 无服务端复制）。"""
@@ -213,5 +228,6 @@ class SftpStorageAdapter(BaseStorageAdapter):
             with client.open(src, "rb") as rf, client.open(dst, "wb") as wf:
                 while chunk := rf.read(1024 * 1024):
                     wf.write(chunk)
-        except Exception as e:
-            raise CustomException(msg=f"SFTP 复制失败: {e!s}")
+        except Exception:
+            logger.exception('SFTP 复制失败')
+            raise
