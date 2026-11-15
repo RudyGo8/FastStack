@@ -17,7 +17,14 @@ class NodeCreateSchema(BaseModel):
     """
 
     name: str = Field(..., max_length=64, description="任务名称")
-    func: str | None = Field(default=None, description="代码块")
+    func: str | None = Field(
+        default=None,
+        description=(
+            "任务函数：两种写法——① 内置函数型 `builtin:<模块名>[.<函数名>]`（白名单解析后直接调用，不经 exec，"
+            "不受 SCHEDULER_ALLOW_CODE_EXEC 限制）；② 原始代码块（需定义 handler(*args, **kwargs)，等同服务器代码执行权限，"
+            "仅在 SCHEDULER_ALLOW_CODE_EXEC=true 时允许）"
+        ),
+    )
     args: str | None = Field(default=None, description="位置参数")
     kwargs: str | None = Field(default=None, description="关键字参数")
     coalesce: bool | None = Field(default=False, description="是否合并运行:是否在多个运行时间到期时仅运行作业一次")
@@ -102,6 +109,11 @@ class NodeOutSchema(NodeCreateSchema, BaseSchema, UserBySchema):
     next_run_time: str | None = Field(default=None, description="下次运行时间")
     last_run_time: str | None = Field(default=None, description="最近一次运行时间")
     last_run_status: int | None = Field(default=None, description="最近一次运行状态(2:成功 3:失败)")
+    schedulable: bool | None = Field(
+        default=None,
+        description="当前是否可调度；false 表示「已启用也不会执行」（如代码块被禁用、内置处理器不存在、未配置函数）",
+    )
+    unschedulable_reason: str | None = Field(default=None, description="不可调度原因（含修复建议）")
 
     model_config = ConfigDict(from_attributes=True)
 

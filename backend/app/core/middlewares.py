@@ -2,13 +2,13 @@ import json
 import uuid
 from typing import Any
 
+from starlette.datastructures import Headers
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.requests import Request
-from starlette.responses import RedirectResponse, Response
-from starlette.types import ASGIApp
+from starlette.responses import PlainTextResponse, RedirectResponse, Response
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.common.enums import RedisInitKeyConfig, SysParamKey
 from app.common.response import ErrorResponse
@@ -122,15 +122,86 @@ class CustomHTTPSRedirectMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if request.url.scheme != "https" and request.headers.get("X-Forwarded-Proto") != "https":
             url = request.url.replace(scheme="https")
-            return RedirectResponse(url, status_code=301)
+            return RedirectResponse(url, 301)
         return await call_next(request)
 
 
-class CustomTrustedHostMiddleware(TrustedHostMiddleware):
-    """可信主机 Host 头校验中间件"""
+def host_of(value: str) -> str:
+    """从 Host 头里取出主机部分（小写、去端口）。
 
-    def __init__(self, app: ASGIApp) -> None:
-        super().__init__(app, allowed_hosts=settings.ALLOWED_HOSTS)
+    修正 Starlette 的 ``host.split(":")[0]`` 在 IPv6 下的误判：
+    ``127.0.0.1:8000`` → ``127.0.0.1``；``[::1]:8000`` → ``::1``；裸 ``::1`` → ``::1``。
+    """
+    v = (value or "").strip().lower()
+    if v.startswith("["):
+        end = v.find("]")
+        return v[1:end] if end != -1 else v
+    # 只有「主机:端口」这一种情况该剥；裸 IPv6 里的多个冒号不是端口分隔符
+    return v.rsplit(":", 1)[0] if v.count(":") == 1 else v
+
+
+class CustomTrustedHostMiddleware:
+    """可信主机 Host 头校验中间件（纯 ASGI 实现）。
+
+    在 Starlette ``TrustedHostMiddleware`` 基础上修正两处，并保持其余语义不变：
+    1. **IPv6 字面量**：Starlette 用 ``host.split(":")[0]``，``[::1]:8000`` 会被切成 ``"["``，
+       导致 ``::1`` 永远校验失败（本地开 ``ALLOW_LOCALHOST_HOSTS`` 时用 IPv6 访问会 400）；
+    2. **大小写**：DNS 主机名不区分大小写，主机与允许清单统一转小写后比较。
+
+    其余行为照旧：``*`` 放行全部；支持 ``*.example.com`` 形式通配；``www.`` 前缀可 301 重定向；
+    允许清单里的条目也做同样归一（``[::1]`` 与 ``[::1]:8000`` 都按 ``::1`` 处理）。
+    """
+
+    app: ASGIApp
+    allowed_hosts: list[str]
+    allow_any: bool
+    www_redirect: bool
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        allowed_hosts: list[str] | None = None,
+        www_redirect: bool = True,
+    ) -> None:
+        hosts = allowed_hosts if allowed_hosts is not None else settings.ALLOWED_HOSTS
+        normalized: list[str] = []
+        for pattern in hosts:
+            assert "*" not in pattern[1:], "通配符只允许出现在最左侧（如 *.example.com）"
+            if pattern.startswith("*") and pattern != "*":
+                assert pattern.startswith("*."), "通配符只允许 *.example.com 形式"
+            normalized.append(host_of(pattern))
+        self.app = app
+        self.allowed_hosts = normalized
+        self.allow_any = "*" in normalized
+        self.www_redirect = www_redirect
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if self.allow_any or scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+
+        host = host_of(Headers(scope=scope).get("host", ""))
+        found_www_redirect = False
+        for pattern in self.allowed_hosts:
+            if host == pattern or (pattern.startswith("*") and host.endswith(pattern[1:])):
+                await self.app(scope, receive, send)
+                return
+            if "www." + host == pattern:
+                found_www_redirect = True
+
+        if scope["type"] == "websocket":
+            # WS 上不能发 HTTP 响应：按「策略违规」关闭连接
+            await send({"type": "websocket.close", "code": 1008})
+            return
+        response: Response
+        if found_www_redirect and self.www_redirect:
+            url = f"{scope.get('scheme', 'http')}://www.{host}"
+            path = scope.get("path", "/")
+            query = scope.get("query_string", b"").decode()
+            response = RedirectResponse(f"{url}{path}" + (f"?{query}" if query else ""), 301)
+        else:
+            response = PlainTextResponse("Invalid host header", 400)
+        await response(scope, receive, send)
 
 
 class CorrelationIdMiddleware(BaseHTTPMiddleware):

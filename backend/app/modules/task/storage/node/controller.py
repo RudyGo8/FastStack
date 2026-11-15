@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, Path, Query, Security, status
 from fastapi.responses import JSONResponse
@@ -65,6 +65,28 @@ async def get_storage_source_list_controller(
 ) -> JSONResponse:
     result: list[StorageNodeOutSchema] = await StorageNodeService(auth, db).get_list(search=search)
     return SuccessResponse(data=result, msg="查询存储源列表成功")
+
+
+@StorageNodeRouter.get("/export", summary="导出存储源配置（不含凭据）", response_model=ResponseSchema[dict[str, Any]])
+async def export_storage_node_config_controller(
+    auth: Annotated[AuthSchema, Security(AuthPermission(["module_task:storage:node:query"]))],
+    db: Annotated[AsyncSession, Depends(db_getter)],
+) -> JSONResponse:
+    result: dict[str, Any] = await StorageNodeService(auth, db).export_config()
+    return SuccessResponse(data=result, msg="导出成功（不含凭据，导入后需重填密码）")
+
+
+@StorageNodeRouter.post("/import", summary="导入存储源配置（不含凭据，按名称去重）", response_model=ResponseSchema[dict[str, int]])
+async def import_storage_node_config_controller(
+    auth: Annotated[AuthSchema, Security(AuthPermission(["module_task:storage:node:create"]))],
+    db: Annotated[AsyncSession, Depends(db_getter)],
+    data: Annotated[dict[str, Any], Body(description="导出的 JSON 结构（version/exported_at/nodes）")],
+) -> JSONResponse:
+    result: dict[str, int] = await StorageNodeService(auth, db).import_config(data)
+    return SuccessResponse(
+        data=result,
+        msg=f"导入完成：新增 {result['created']} 个，跳过 {result['skipped']} 个（同名已存在），无效 {result['invalid']} 个",
+    )
 
 
 @StorageNodeRouter.get("/detail/{id}", summary="查询存储源详情", response_model=ResponseSchema[StorageNodeOutSchema])

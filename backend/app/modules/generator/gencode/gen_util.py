@@ -296,14 +296,17 @@ class GenUtils:
 
     @classmethod
     def split_column_type(cls, column_type: str) -> list[str]:
-        """拆分列类型
+        """拆分列类型中的长度/精度参数（**只返回校验过的数字**）。
+
+        原实现用 ``column_type.split("(")[1]`` 直接切分，会把括号内的任意文本带出去；
+        这里改为正则捕获 + 数字校验（与 template_safety.extract_type_params 同源规则）。
 
         参数:
         - column_type (str): 字段类型。
 
         返回:
-        - list[str]: 拆分结果。
+        - list[str]: 形如 ["64"] 或 ["10", "2"]；无有效参数时返回 []。
         """
-        if "(" in column_type and ")" in column_type:
-            return column_type.split("(")[1].split(")")[0].split(",")
-        return []
+        from .template_safety import extract_type_params
+
+        return list(extract_type_params(column_type))

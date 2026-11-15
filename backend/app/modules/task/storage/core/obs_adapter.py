@@ -1,7 +1,7 @@
-from datetime import UTC, datetime
-from typing import Any
+from __future__ import annotations
 
-from obs import ObsClient
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from app.core.exceptions import CustomException
 from app.core.logger import logger
@@ -13,6 +13,12 @@ from app.modules.task.storage.core.base import (
     StorageProtocol,
     normalize_endpoint,
 )
+from app.utils.lazy_sdk import lazy_module
+
+if TYPE_CHECKING:
+    import obs
+else:
+    obs = lazy_module("obs")
 
 
 class ObsStorageAdapter(BaseStorageAdapter):
@@ -123,7 +129,7 @@ class ObsStorageAdapter(BaseStorageAdapter):
         if not self.config.endpoint:
             raise CustomException(msg="OBS 存储源必须配置 endpoint")
         adv = ObsAdvancedConfig(**self.config.advanced_config)
-        self.client = ObsClient(
+        self.client = obs.ObsClient(
             access_key_id=self.config.username or "",
             secret_access_key=self.config.password or "",
             server=normalize_endpoint(self.config.endpoint, self.config.scheme),
@@ -176,7 +182,8 @@ class ObsStorageAdapter(BaseStorageAdapter):
                         content=f,
                     )
                 if not self._is_ok(resp):
-                    raise CustomException(msg=f"OBS 上传失败: {self._error_desc(resp)}")
+                    logger.error(f"OBS 上传失败: {self._error_desc(resp)}")
+                    raise RuntimeError(f"OBS 上传失败: {self._error_desc(resp)}")
                 return remote_path
             part_size, concurrency, _ = self._multipart_settings()
             resp = self.client.uploadFile(
@@ -188,11 +195,13 @@ class ObsStorageAdapter(BaseStorageAdapter):
                 enableCheckpoint=True,
             )
             if not self._is_ok(resp):
-                raise CustomException(msg=f"OBS 上传失败: {self._error_desc(resp)}")
+                logger.error(f"OBS 上传失败: {self._error_desc(resp)}")
+                raise RuntimeError(f"OBS 上传失败: {self._error_desc(resp)}")
         except CustomException:
             raise
-        except Exception as e:
-            raise CustomException(msg=f"OBS 上传失败: {e!s}")
+        except Exception:
+            logger.exception('OBS 上传失败')
+            raise
         return remote_path
 
     def _sync_download(self, remote_path: str, local_path: str) -> str:
@@ -207,22 +216,26 @@ class ObsStorageAdapter(BaseStorageAdapter):
                 enableCheckpoint=True,
             )
             if not self._is_ok(resp):
-                raise CustomException(msg=f"OBS 下载失败: {self._error_desc(resp)}")
+                logger.error(f"OBS 下载失败: {self._error_desc(resp)}")
+                raise RuntimeError(f"OBS 下载失败: {self._error_desc(resp)}")
         except CustomException:
             raise
-        except Exception as e:
-            raise CustomException(msg=f"OBS 下载失败: {e!s}")
+        except Exception:
+            logger.exception('OBS 下载失败')
+            raise
         return local_path
 
     def _sync_delete(self, remote_path: str) -> None:
         try:
             resp = self.client.deleteObject(bucketName=self._require_bucket(), objectKey=remote_path)
             if not self._is_ok(resp):
-                raise CustomException(msg=f"OBS 删除失败: {self._error_desc(resp)}")
+                logger.error(f"OBS 删除失败: {self._error_desc(resp)}")
+                raise RuntimeError(f"OBS 删除失败: {self._error_desc(resp)}")
         except CustomException:
             raise
-        except Exception as e:
-            raise CustomException(msg=f"OBS 删除失败: {e!s}")
+        except Exception:
+            logger.exception('OBS 下载失败')
+            raise
 
     def _sync_exists(self, remote_path: str) -> bool:
         try:
@@ -255,7 +268,8 @@ class ObsStorageAdapter(BaseStorageAdapter):
                     kwargs["marker"] = marker
                 resp = self.client.listObjects(**kwargs)
                 if not self._is_ok(resp):
-                    raise CustomException(msg=f"OBS 列表失败: {self._error_desc(resp)}")
+                    logger.error(f"OBS 列表失败: {self._error_desc(resp)}")
+                    raise RuntimeError(f"OBS 列表失败: {self._error_desc(resp)}")
                 body = getattr(resp, "body", None)
                 for common in getattr(body, "commonPrefixs", None) or []:
                     raw_key = (getattr(common, "prefix", "") or "").rstrip("/")
@@ -291,8 +305,9 @@ class ObsStorageAdapter(BaseStorageAdapter):
             return result
         except CustomException:
             raise
-        except Exception as e:
-            raise CustomException(msg=f"OBS 列表失败: {e!s}")
+        except Exception:
+            logger.exception('OBS 列表失败')
+            raise
 
     def _sync_list_page(self, prefix: str, page_size: int, cursor: str | None) -> StoragePage:
         """游标分页：单次 SDK 请求只拉一页（OBS marker），翻页经前端回传游标。"""
@@ -307,7 +322,8 @@ class ObsStorageAdapter(BaseStorageAdapter):
                 kwargs["marker"] = cursor
             resp = self.client.listObjects(**kwargs)
             if not self._is_ok(resp):
-                raise CustomException(msg=f"OBS 列表失败: {self._error_desc(resp)}")
+                logger.error(f"OBS 列表失败: {self._error_desc(resp)}")
+                raise RuntimeError(f"OBS 列表失败: {self._error_desc(resp)}")
             body = getattr(resp, "body", None)
             truncated = bool(getattr(body, "is_truncated", None))
             next_cursor = getattr(body, "next_marker", None) or None
@@ -338,29 +354,47 @@ class ObsStorageAdapter(BaseStorageAdapter):
             )
         except CustomException:
             raise
-        except Exception as e:
-            raise CustomException(msg=f"OBS 列表失败: {e!s}")
+        except Exception:
+            logger.exception('OBS 列表失败')
+            raise
 
     def _sync_list_buckets(self) -> list[str]:
         """列出账号下全部存储桶。"""
         try:
             resp = self.client.listBuckets()
             if not self._is_ok(resp):
-                raise CustomException(msg=f"OBS 桶列表失败: {self._error_desc(resp)}")
+                logger.error(f"OBS 桶列表失败: {self._error_desc(resp)}")
+                raise RuntimeError(f"OBS 桶列表失败: {self._error_desc(resp)}")
             body = getattr(resp, "body", None)
             buckets = getattr(body, "buckets", None) or []
             return [getattr(b, "name", "") or "" for b in buckets if getattr(b, "name", "")]
         except CustomException:
             raise
+        except Exception:
+            logger.exception('OBS 桶列表失败')
+            raise
+
+    def _sync_create_bucket(self, bucket: str) -> None:
+        """创建桶（OBS SDK 不抛异常，按返回状态码判断）。"""
+        try:
+            resp = self.client.createBucket(bucketName=bucket)
+            status = int(getattr(resp, "status", 0) or 0)
+            if status >= 300:
+                reason = getattr(resp, "errorMessage", "") or status
+                raise CustomException(msg=f"OBS 创建桶失败: {reason}")
+        except CustomException:
+            raise
         except Exception as e:
-            raise CustomException(msg=f"OBS 桶列表失败: {e!s}")
+            logger.exception('OBS 创建桶失败')
+            raise CustomException(msg=f"OBS 创建桶失败: {e}") from e
 
     def _sync_get_url(self, remote_path: str, expire: int) -> str:
         try:
             resp = self.client.createSignedUrl("GET", bucketName=self._require_bucket(), objectKey=remote_path, expires=expire)
             return getattr(resp, "signedUrl", "")
-        except Exception as e:
-            raise CustomException(msg=f"OBS 生成预签名 URL 失败: {e!s}")
+        except Exception:
+            logger.exception('OBS 桶列表失败')
+            raise
 
     # ── 目录操作（对象存储以 key/ 占位对象模拟目录）──────────────────
 
@@ -374,7 +408,8 @@ class ObsStorageAdapter(BaseStorageAdapter):
                 kwargs["marker"] = marker
             resp = self.client.listObjects(**kwargs)
             if not self._is_ok(resp):
-                raise CustomException(msg=f"OBS 列举对象失败: {self._error_desc(resp)}")
+                logger.error(f"OBS 列举对象失败: {self._error_desc(resp)}")
+                raise RuntimeError(f"OBS 列举对象失败: {self._error_desc(resp)}")
             body = getattr(resp, "body", None)
             for obj in getattr(body, "contents", None) or []:
                 key = getattr(obj, "key", "")
@@ -403,21 +438,25 @@ class ObsStorageAdapter(BaseStorageAdapter):
         try:
             resp = self.client.putContent(bucketName=self._require_bucket(), objectKey=remote_dir.rstrip("/") + "/", content=b"")
             if not self._is_ok(resp):
-                raise CustomException(msg=f"OBS 创建目录失败: {self._error_desc(resp)}")
+                logger.error(f"OBS 创建目录失败: {self._error_desc(resp)}")
+                raise RuntimeError(f"OBS 创建目录失败: {self._error_desc(resp)}")
         except CustomException:
             raise
-        except Exception as e:
-            raise CustomException(msg=f"OBS 创建目录失败: {e!s}")
+        except Exception:
+            logger.exception('OBS 创建目录失败')
+            raise
 
     def _sync_rmdir(self, remote_dir: str) -> None:
         try:
             resp = self.client.deleteObject(bucketName=self._require_bucket(), objectKey=remote_dir.rstrip("/") + "/")
             if not self._is_ok(resp):
-                raise CustomException(msg=f"OBS 删除目录失败: {self._error_desc(resp)}")
+                logger.error(f"OBS 删除目录失败: {self._error_desc(resp)}")
+                raise RuntimeError(f"OBS 删除目录失败: {self._error_desc(resp)}")
         except CustomException:
             raise
-        except Exception as e:
-            raise CustomException(msg=f"OBS 删除目录失败: {e!s}")
+        except Exception:
+            logger.exception('OBS 创建目录失败')
+            raise
 
     def _sync_copy(self, src: str, dst: str) -> None:
         """复制：目录走基类递归实现；文件用服务端 copyObject。"""
@@ -432,11 +471,13 @@ class ObsStorageAdapter(BaseStorageAdapter):
                 destObjectKey=dst,
             )
             if not self._is_ok(resp):
-                raise CustomException(msg=f"OBS 复制失败: {self._error_desc(resp)}")
+                logger.error(f"OBS 复制失败: {self._error_desc(resp)}")
+                raise RuntimeError(f"OBS 复制失败: {self._error_desc(resp)}")
         except CustomException:
             raise
-        except Exception as e:
-            raise CustomException(msg=f"OBS 复制失败: {e!s}")
+        except Exception:
+            logger.exception('OBS 复制失败')
+            raise
 
     def _sync_rename(self, src: str, dst: str) -> None:
         """重命名/移动：优先 OBS 原生 renameFile（支持目录级），失败回退先复制后删除。"""
@@ -455,8 +496,9 @@ class ObsStorageAdapter(BaseStorageAdapter):
     def _sync_list_recursive(self, prefix: str) -> list[StorageObject]:
         try:
             keys = self._list_all_keys(prefix)
-        except Exception as e:
-            raise CustomException(msg=f"OBS 递归列表失败: {e!s}")
+        except Exception:
+            logger.exception('OBS 递归列表失败')
+            raise
         return self._entries_from_keys(keys)
 
     def _sync_delete_dir(self, remote_dir: str) -> None:
@@ -473,11 +515,13 @@ class ObsStorageAdapter(BaseStorageAdapter):
                     deleteObjectsRequest={"quiet": True, "objects": [{"key": k} for k in batch]},
                 )
                 if not self._is_ok(resp):
-                    raise CustomException(msg=f"OBS 递归删除失败: {self._error_desc(resp)}")
+                    logger.error(f"OBS 递归删除失败: {self._error_desc(resp)}")
+                    raise RuntimeError(f"OBS 递归删除失败: {self._error_desc(resp)}")
         except CustomException:
             raise
-        except Exception as e:
-            raise CustomException(msg=f"OBS 递归删除失败: {e!s}")
+        except Exception:
+            logger.exception('OBS 递归删除失败')
+            raise
 
     def _sync_close(self) -> None:
         """关闭 OBS 客户端连接。"""

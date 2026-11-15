@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.setting import settings
 from app.core.ap_scheduler import SchedulerUtil
 from app.core.base_schema import AuthSchema, PageResultSchema
 from app.core.exceptions import CustomException
@@ -71,25 +72,36 @@ class JobService:
         state = SchedulerUtil.get_scheduler_state()
         is_running = SchedulerUtil.is_running()
         jobs = SchedulerUtil.get_jobs()
+        # 可观测性（t15）：把"已注册但当前不可执行"的任务显式打出并计数，
+        # 运维不必逐个点开才知道开关调整/处理器改名后哪些任务静默失效
+        unschedulable = SchedulerUtil.log_unschedulable_jobs(context="调度器状态查询")
         return SchedulerStatusSchema(
             status=JobService._SCHEDULER_STATE_MAP.get(state, "未知"),
             is_running=is_running,
             job_count=len(jobs),
+            code_exec_enabled=settings.SCHEDULER_ALLOW_CODE_EXEC,
+            unschedulable_count=len(unschedulable),
         )
 
     @staticmethod
     def get_scheduler_jobs() -> list[SchedulerJobSchema]:
         jobs = SchedulerUtil.get_jobs()
-        return [
-            SchedulerJobSchema(
-                id=job.id,
-                name=job.name,
-                trigger=str(job.trigger),
-                next_run_time=str(job.next_run_time) if job.next_run_time else None,
-                status=SchedulerUtil.get_job_status(job_id=job.id),
+        items: list[SchedulerJobSchema] = []
+        for job in jobs:
+            schedulable, reason = SchedulerUtil.describe_schedulability(SchedulerUtil.job_code_block(job))
+            items.append(
+                SchedulerJobSchema(
+                    id=job.id,
+                    name=job.name,
+                    trigger=str(job.trigger),
+                    # pending/未排程任务没有 next_run_time 属性（APScheduler 只在真正排程后设置），必须 getattr 兜底
+                    next_run_time=str(job.next_run_time) if getattr(job, "next_run_time", None) else None,
+                    status=SchedulerUtil.get_job_status(job_id=job.id),
+                    schedulable=schedulable,
+                    unschedulable_reason=None if schedulable else reason,
+                ),
             )
-            for job in jobs
-        ]
+        return items
 
     # ─── 调度器与任务运维（controller 唯一入口，禁止直调 SchedulerUtil）───
 

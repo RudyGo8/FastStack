@@ -59,7 +59,7 @@ async def delete_log_controller(
     return SuccessResponse(msg="删除登录日志成功")
 
 
-@LogRouter.get("/operation/detail/{id}", summary="获取操作日志详情", response_model=ResponseSchema[OperationLogDetailOutSchema], dependencies=[Security(AuthPermission(["module_system:log:query"]))])
+@LogRouter.get("/operation/detail/{id}", summary="获取操作日志详情", response_model=ResponseSchema[OperationLogDetailOutSchema], dependencies=[Security(AuthPermission(["module_system:log:detail"]))])
 async def get_operation_log_detail_controller(
     auth: Annotated[AuthSchema, Security(get_current_user)],
     db: Annotated[AsyncSession, Depends(db_getter)],
@@ -70,7 +70,10 @@ async def get_operation_log_detail_controller(
 
 
 @LogRouter.get(
-    "/operation/list", summary="获取操作日志列表", response_model=ResponseSchema[PageResultSchema[OperationLogOutSchema]], dependencies=[Security(AuthPermission(["module_system:log:query"]))],
+    "/operation/list",
+    summary="获取操作日志列表",
+    response_model=ResponseSchema[PageResultSchema[OperationLogOutSchema]],
+    dependencies=[Security(AuthPermission(["module_system:log:query"]))],
 )
 async def get_operation_log_list_controller(
     auth: Annotated[AuthSchema, Security(get_current_user)],
@@ -104,9 +107,7 @@ async def export_operation_log_list_controller(
     search: Annotated[OperationLogQueryParam, Body()],
 ) -> StreamingResponse:
     operation_log_query_result: list[OperationLogOutSchema] = await OperationLogService(auth, db).get_list(search=search)
-    operation_log_export_result: bytes = await OperationLogService.export_list(
-        operation_log_list=[item.model_dump() for item in operation_log_query_result]
-    )
+    operation_log_export_result: bytes = await OperationLogService.export_list(operation_log_list=[item.model_dump() for item in operation_log_query_result])
 
     return StreamResponse(
         data=bytes2file_response(operation_log_export_result),

@@ -1,0 +1,7 @@
+# ============================================================================
+# MySQL 驱动（DATABASE_TYPE=mysql 时必需）
+#   aiomysql / pymysql：异步与同步连接，分别对应 ASYNC_DB_URI 与 DB_URI
+# 用法：pip install -r requirements/base.txt -r requirements/db/mysql.txt
+# ============================================================================
+aiomysql>=0.2.0                        # 异步驱动（ASYNC_DB_URI: mysql+aiomysql://）
+pymysql==1.2.0                         # 同步驱动（DB_URI: mysql+pymysql://，迁移与后台任务用）

@@ -468,7 +468,7 @@ class UploadUtil:
             raise
         except Exception as e:
             logger.error(f"文件上传失败: {e}")
-            raise CustomException(msg=f"文件上传失败: {e}")
+            raise
 
     @staticmethod
     def get_file_tree(file_path: str) -> list[dict]:

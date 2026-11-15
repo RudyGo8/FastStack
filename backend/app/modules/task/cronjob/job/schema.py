@@ -14,6 +14,8 @@ class SchedulerStatusSchema(BaseModel):
     status: str = Field(..., description="调度器状态(运行中/已暂停/已停止/未知)")
     is_running: bool = Field(..., description="是否运行中")
     job_count: int = Field(..., description="调度器任务数量")
+    code_exec_enabled: bool = Field(default=False, description="是否允许执行用户提交的代码块(SCHEDULER_ALLOW_CODE_EXEC)")
+    unschedulable_count: int = Field(default=0, description="已注册但当前不可执行的任务数（>0 时列表页会给出原因）")
 
 
 class SchedulerJobSchema(BaseModel):
@@ -24,6 +26,8 @@ class SchedulerJobSchema(BaseModel):
     trigger: str = Field(..., description="触发器")
     next_run_time: str | None = Field(default=None, description="下次运行时间")
     status: int = Field(..., description="任务状态(0:运行中 1:暂停中 2:已停止 3:未知)")
+    schedulable: bool = Field(default=True, description="当前是否可执行；false 表示已注册但执行时会被拒绝")
+    unschedulable_reason: str | None = Field(default=None, description="不可执行原因（含修复建议）")
 
 
 class SchedulerJobModifySchema(BaseModel):

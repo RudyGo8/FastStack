@@ -18,13 +18,24 @@ from .schema import (
     AiChatResponseSchema,
     AiModelConfigListResponse,
     AiModelConfigSchema,
+    AiModelOptionSchema,
+    AiModelProbeSchema,
+    AiModelTestResultSchema,
+    AiModelTestSchema,
+    AiToolSchema,
     ChatQuerySchema,
     ChatSessionCreateSchema,
     ChatSessionOutSchema,
     ChatSessionQueryParam,
     ChatSessionUpdateSchema,
 )
-from .service import AiModelConfigService, ChatService, get_user_model_config
+from .service import (
+    AiModelConfigService,
+    ChatService,
+    get_user_model_config,
+    probe_available_models,
+    probe_model_connection,
+)
 
 ChatRouter = APIRouter(route_class=OperationLogRoute, prefix="/chat", tags=["AI管理"])
 
@@ -104,13 +115,14 @@ async def ai_chat_controller(
     redis: Annotated[Redis, Depends(redis_getter)],
     data: Annotated[AiChatRequestSchema, Body(description="对话请求")],
 ) -> JSONResponse:
-    service = ChatService(auth)
+    service = ChatService(auth, redis=redis)
     # 与 WebSocket 流式一致：优先使用用户激活的模型配置
     model_config = await get_user_model_config(redis, auth.user.id)
     result = await service.chat_non_stream(
         message=data.message,
         session_id=data.session_id,
         model_config=model_config,
+        use_tools=data.use_tools,
     )
     return SuccessResponse(
         data=AiChatResponseSchema(
@@ -178,6 +190,44 @@ async def activate_model_config_controller(
     return SuccessResponse(data=None, msg="已切换模型")
 
 
+@ChatRouter.post(
+    "/model/available",
+    summary="拉取接口可用模型列表（按填写中的接口与密钥，不落库）",
+    response_model=ResponseSchema[list[AiModelOptionSchema]],
+)
+async def list_available_models_controller(
+    auth: Annotated[AuthSchema, Security(AuthPermission(["module_ai:chat:update"]))],
+    data: Annotated[AiModelProbeSchema, Body(description="接口地址与密钥")],
+) -> JSONResponse:
+    result = await probe_available_models(data.base_url, data.api_key)
+    return SuccessResponse(data=result, msg="拉取模型列表成功")
+
+
+@ChatRouter.post(
+    "/model/test",
+    summary="测试 AI 接口连通性（按填写中的参数探测，不落库）",
+    response_model=ResponseSchema[AiModelTestResultSchema],
+)
+async def test_model_connection_controller(
+    auth: Annotated[AuthSchema, Security(AuthPermission(["module_ai:chat:update"]))],
+    data: Annotated[AiModelTestSchema, Body(description="接口地址、密钥与模型 ID")],
+) -> JSONResponse:
+    result = await probe_model_connection(data.base_url, data.api_key, data.model_id)
+    return SuccessResponse(data=result, msg="连通性测试通过")
+
+
+@ChatRouter.get("/tools", summary="列出可用的只读工具（AI 助手能力清单）", response_model=ResponseSchema[list[AiToolSchema]])
+async def list_ai_tools_controller(
+    auth: Annotated[AuthSchema, Security(AuthPermission(["module_ai:chat:query"]))],
+    redis: Annotated[Redis, Depends(redis_getter)],
+) -> JSONResponse:
+    from app.modules.ai.tools.registry import build_readonly_tools
+
+    tools = build_readonly_tools(auth, redis)
+    result = [AiToolSchema(name=spec.name, description=spec.description) for spec in tools]
+    return SuccessResponse(data=result, msg="查询可用工具成功")
+
+
 async def _send_error_and_close(websocket: WebSocket, message: str) -> None:
     """发送错误消息并关闭连接"""
     try:
@@ -230,7 +280,7 @@ async def websocket_chat_controller(websocket: WebSocket) -> None:
         redis = websocket.app.state.redis
         logger.info("WebSocket连接已建立: {} - 用户: {}", websocket.client, auth.user.username or "未认证")
 
-        chat_service = ChatService(auth)
+        chat_service = ChatService(auth, redis=redis)
 
         # 消息循环
         while True:

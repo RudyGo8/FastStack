@@ -1,4 +1,5 @@
 import json
+import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -11,12 +12,11 @@ from croniter import croniter
 from sqlalchemy import false, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config.setting import settings
 from app.core.ap_scheduler import SchedulerUtil, scheduler
 from app.core.base_schema import AuthSchema, PageResultSchema
 from app.core.exceptions import CustomException
 from app.core.logger import logger
-from app.core.validator import datetime_validator
+from app.core.validator import datetime_validator, to_local_datetime
 from app.utils.common_util import search_to_dict
 
 from .crud import NodeCRUD
@@ -86,6 +86,9 @@ class NodeService:
             raise CustomException(msg="创建失败，该节点已存在")
 
         _validate_node_plan(data.trigger, data.trigger_args)
+        if not data.code:
+            # code 是模型必填且唯一；未填写时生成稳定可读的任务编码
+            data.code = f"job_{uuid.uuid4().hex[:12]}"
         obj = await NodeCRUD(self.auth, self.db).create_obj_crud(data=data)
         if not obj:
             raise CustomException(msg="创建失败")
@@ -179,7 +182,17 @@ class NodeService:
             node_id = str(item.id) if item.id is not None else ""
             job = jobs.get(node_id)
             if job:
-                item.next_run_time = str(job.next_run_time) if job.next_run_time else None
+                item.next_run_time = str(job.next_run_time) if getattr(job, "next_run_time", None) else None
+
+            # 可调度状态（t15）：区分「已启用且可执行」与「已启用但当前不会执行」，
+            # 并把后者以 WARN 打出（带节点标识），避免升级/开关调整后的静默失效
+            schedulable, reason = SchedulerUtil.describe_schedulability(item.func)
+            item.schedulable = schedulable
+            item.unschedulable_reason = None if schedulable else reason
+            if not schedulable and item.status == 0:
+                _warn_unschedulable_node(node_id=node_id, name=item.name, reason=reason)
+            elif schedulable:
+                _clear_unschedulable_warning(node_id)
             stmt = (
                 select(JobModel)
                 .where(JobModel.job_id == node_id, JobModel.is_deleted == false())
@@ -188,8 +201,43 @@ class NodeService:
             )
             row = (await self.db.execute(stmt)).scalars().first()
             if row:
-                item.last_run_time = row.created_time.isoformat() if row.created_time else None
+                item.last_run_time = (to_local_datetime(row.created_time).strftime("%Y-%m-%d %H:%M:%S") if row.created_time and to_local_datetime(row.created_time) else None)
                 item.last_run_status = row.status
+
+
+# 「已启用但不可调度」的告警去重：同一节点 + 同一原因只告警一次，
+# 避免列表接口被反复调用时刷屏；节点恢复可调度时清除记录（见 _enrich_runtime）。
+_WARNED_UNSCHEDULABLE: dict[str, str] = {}
+
+
+def _warn_unschedulable_node(*, node_id: str, name: str | None, reason: str | None) -> None:
+    """对「已启用但当前不可调度」的节点打一次 WARN（带节点标识与原因）。
+
+    参数:
+    - node_id (str): 节点 ID（调度器 job id）。
+    - name (str | None): 节点名称。
+    - reason (str | None): 不可调度原因。
+
+    返回:
+    - None
+    """
+    text = reason or ""
+    if _WARNED_UNSCHEDULABLE.get(node_id) == text:
+        return
+    _WARNED_UNSCHEDULABLE[node_id] = text
+    logger.warning(f"节点任务不可调度（已启用但不会执行）: id={node_id} name={name!r} 原因={reason}")
+
+
+def _clear_unschedulable_warning(node_id: str) -> None:
+    """节点恢复可调度后清除其告警去重记录（下次再失效仍会告警）。
+
+    参数:
+    - node_id (str): 节点 ID。
+
+    返回:
+    - None
+    """
+    _WARNED_UNSCHEDULABLE.pop(node_id, None)
 
 
 # ── NodeModel 封装的调度操作（模块级函数，供 service / 启动自愈复用）────
@@ -281,8 +329,9 @@ def _add_job_with_trigger(
     code_block = job_info.func
     if not code_block or not code_block.strip():
         raise ValueError("任务代码块不能为空")
-    if not settings.SCHEDULER_ALLOW_CODE_EXEC:
-        raise CustomException(msg="服务已禁用定时任务代码执行（SCHEDULER_ALLOW_CODE_EXEC=False），无法注册代码块任务")
+    # 可调度性判定（单一事实来源）：builtin: 引用走白名单、不经 exec，因此**开关关闭时也允许注册**；
+    # 只有"原始代码块"才会被 SCHEDULER_ALLOW_CODE_EXEC=False 拦住，并在提示里给出 builtin 替代写法。
+    SchedulerUtil.require_schedulable(code_block)
 
     jobstore = job_info.jobstore or "default"
     executor = job_info.executor or "threadpool"
@@ -368,8 +417,8 @@ def run_node_once(node: NodeModel) -> str:
     """
     if not node.func or not node.func.strip():
         raise ValueError("任务代码块不能为空")
-    if not settings.SCHEDULER_ALLOW_CODE_EXEC:
-        raise CustomException(msg="服务已禁用定时任务代码执行（SCHEDULER_ALLOW_CODE_EXEC=False），无法执行代码块任务")
+    # 手动执行同样按可调度性判定：builtin 引用可直接执行；原始代码块在开关关闭时给出替代写法
+    SchedulerUtil.require_schedulable(node.func)
     temp_job_id = f"{node.id}{_MANUAL_JOB_PREFIX}{datetime.now():%Y%m%d%H%M%S}"
     trigger = DateTrigger(run_date=datetime.now() + timedelta(seconds=0.1), timezone="Asia/Shanghai")
     _add_job_with_trigger(node, trigger, job_id_override=temp_job_id, name_suffix=" - 手动执行")

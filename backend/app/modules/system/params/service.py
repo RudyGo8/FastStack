@@ -57,10 +57,11 @@ class ParamsService:
             )
             if not result:
                 logger.error(f"同步配置到缓存失败: {out}")
-                raise CustomException(msg="同步配置到缓存失败")
+                logger.error("同步配置到缓存失败")
+                raise RuntimeError("同步配置到缓存失败")
         except Exception as e:
             logger.error(f"更新系统配置失败: {e}")
-            raise CustomException(msg="同步配置到缓存失败") from e
+            raise
 
         return out
 
@@ -95,7 +96,7 @@ class ParamsService:
             await ParamsService._sync_configs_to_redis(redis, config_obj)
         except Exception as e:
             logger.error(f"❌️ 初始化系统参数到 Redis 失败: {e}")
-            raise CustomException(msg="初始化系统参数到 Redis 失败") from e
+            raise
 
     @staticmethod
     async def get_init_cache(redis: Redis) -> list[dict]:

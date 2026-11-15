@@ -22,6 +22,7 @@ from app.core.security import (
     create_access_token,
     decode_access_token,
 )
+from app.modules.system.auth.captcha_puzzle import build_puzzle
 from app.modules.system.log.crud import LoginLogCRUD
 from app.modules.system.log.schema import LoginLogCreateSchema
 from app.modules.system.user.crud import UserCRUD
@@ -81,7 +82,10 @@ async def auto_register_login_user(
         existing = await UserCRUD(auth, db).get(username=username)
         if existing:
             return existing
-        raise CustomException(msg=fail_msg)
+        # 原始异常被吞掉（可能是 DB/唯一约束/驱动等未知服务端故障）：按 500 返回，
+        # 避免监控把内部故障误判为客户端错误；确实的客户端问题由 UserService 的 CustomException 透传
+        logger.exception("自动注册第三方登录用户失败")
+        raise
     user = await UserCRUD(auth, db).get(username=username)
     if not user:
         raise CustomException(msg=fail_msg)
@@ -399,6 +403,7 @@ class LoginService:
                 sub=session_id,
                 is_refresh=False,
                 exp=now + access_expires,
+                jti=uuid.uuid4().hex,
             ),
         )
         refresh_token = create_access_token(
@@ -406,6 +411,7 @@ class LoginService:
                 sub=session_id,
                 is_refresh=True,
                 exp=now + refresh_expires,
+                jti=uuid.uuid4().hex,
             ),
         )
 
@@ -489,6 +495,7 @@ class LoginService:
                 sub=session_id,
                 is_refresh=False,
                 exp=now + access_expires,
+                jti=uuid.uuid4().hex,
             ),
         )
 
@@ -497,6 +504,7 @@ class LoginService:
                 sub=session_id,
                 is_refresh=True,
                 exp=now + refresh_expires,
+                jti=uuid.uuid4().hex,
             ),
         )
 
@@ -566,16 +574,35 @@ class CaptchaService:
         try:
             state = json.loads(raw)
         except (TypeError, json.JSONDecodeError):
-            return {"status": raw, "fingerprint": "", "issued_at": 0.0}
+            return {"status": raw, "fingerprint": "", "issued_at": 0.0, "target_x": None}
         if not isinstance(state, dict):
-            return {"status": "", "fingerprint": "", "issued_at": 0.0}
-        return {"status": state.get("status", ""), "fingerprint": state.get("fingerprint", ""), "issued_at": float(state.get("issued_at") or 0.0)}
+            return {"status": "", "fingerprint": "", "issued_at": 0.0, "target_x": None}
+        return {
+            "status": state.get("status", ""),
+            "fingerprint": state.get("fingerprint", ""),
+            "issued_at": float(state.get("issued_at") or 0.0),
+            "target_x": state.get("target_x"),
+        }
 
     @staticmethod
-    async def _write_state(redis: Redis, captcha_key: str, status: str, fingerprint: str, issued_at: float) -> None:
+    async def _write_state(
+        redis: Redis,
+        captcha_key: str,
+        status: str,
+        fingerprint: str,
+        issued_at: float,
+        target_x: int | None = None,
+    ) -> None:
         await RedisCURD(redis).set(
             key=CaptchaService._redis_key(captcha_key),
-            value=json.dumps({"status": status, "fingerprint": fingerprint, "issued_at": issued_at}),
+            value=json.dumps(
+                {
+                    "status": status,
+                    "fingerprint": fingerprint,
+                    "issued_at": issued_at,
+                    "target_x": target_x,
+                }
+            ),
             expire=settings.CAPTCHA_EXPIRE_SECONDS,
         )
 
@@ -586,29 +613,41 @@ class CaptchaService:
 
     @staticmethod
     async def get_captcha(redis: Redis, request: Request) -> CaptchaOutSchema:
-        """获取验证码（滑块模式：仅生成 key，无需算术图片）"""
+        """获取拼图验证码：服务端出题，缺口横坐标只保存在 Redis。"""
         if not settings.CAPTCHA_ENABLE:
-            raise CustomException(msg="未开启验证码服务")
+            return CaptchaOutSchema(enable=False)
 
         captcha_key = get_random_character()
-        # 存储滑块状态：pending（待验证）/ verified（已验证通过）
+        puzzle = build_puzzle(captcha_key)
         await CaptchaService._write_state(
             redis=redis,
             captcha_key=captcha_key,
             status=CaptchaService.PENDING,
             fingerprint=get_client_fingerprint(request),
             issued_at=time.time(),
+            target_x=puzzle["target_x"],
         )
 
         return CaptchaOutSchema(
             enable=settings.CAPTCHA_ENABLE,
             key=CaptchaKey(captcha_key),
-            img_base=CaptchaBase64(""),
+            img_base=CaptchaBase64(puzzle["img_base"]),
+            piece_base=CaptchaBase64(puzzle["piece_base"]),
+            piece_y=puzzle["piece_y"],
+            piece_width=puzzle["piece_width"],
+            piece_height=puzzle["piece_height"],
+            bg_width=puzzle["bg_width"],
+            bg_height=puzzle["bg_height"],
         )
 
     @staticmethod
-    async def slider_complete(redis: Redis, request: Request, captcha_key: str) -> dict:
-        """标记滑块验证完成"""
+    async def slider_complete(
+        redis: Redis,
+        request: Request,
+        captcha_key: str,
+        position: int | None = None,
+    ) -> dict:
+        """校验拼图位置并标记验证通过"""
         if not captcha_key:
             raise CustomException(msg="验证码标识不能为空")
 
@@ -621,6 +660,13 @@ class CaptchaService:
             logger.warning("滑块验证来源与签发来源不一致，已拒绝: key={}", captcha_key)
             raise CustomException(msg="验证码无效，请刷新重试")
         # 签发与完成可能落在不同进程/不同主机，只能用墙钟；出现负值说明时钟回拨，放行以免误伤
+        target_x = state.get("target_x")
+        if target_x is not None:
+            if position is None:
+                raise CustomException(msg="请拖动滑块完成拼图")
+            if abs(int(position) - int(target_x)) > 8:
+                raise CustomException(msg="拼图位置不正确，请重试")
+
         elapsed = time.time() - state["issued_at"]
         if 0 <= elapsed < settings.CAPTCHA_MIN_VERIFY_SECONDS:
             raise CustomException(msg="验证过于频繁，请完成滑块后重试")
@@ -632,6 +678,7 @@ class CaptchaService:
             status=CaptchaService.VERIFIED,
             fingerprint=state["fingerprint"] or get_client_fingerprint(request),
             issued_at=state["issued_at"],
+            target_x=target_x,
         )
 
         return {"captcha_key": captcha_key, "verified": True}

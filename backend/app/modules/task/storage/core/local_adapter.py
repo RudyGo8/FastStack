@@ -36,16 +36,18 @@ class LocalStorageAdapter(BaseStorageAdapter):
         try:
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             shutil.copy2(local_path, dest)
-        except Exception as e:
-            raise CustomException(msg=f"本地存储上传失败: {e!s}")
+        except Exception:
+            logger.exception('本地存储上传失败')
+            raise
         return remote_path
 
     def _sync_download(self, remote_path: str, local_path: str) -> str:
         src = self._abs_path(remote_path)
         try:
             shutil.copy2(src, local_path)
-        except Exception as e:
-            raise CustomException(msg=f"本地存储下载失败: {e!s}")
+        except Exception:
+            logger.exception('本地存储下载失败')
+            raise
         return local_path
 
     def _sync_delete(self, remote_path: str) -> None:
@@ -55,8 +57,9 @@ class LocalStorageAdapter(BaseStorageAdapter):
                 shutil.rmtree(target)
             elif os.path.exists(target):
                 os.remove(target)
-        except Exception as e:
-            raise CustomException(msg=f"本地存储删除失败: {e!s}")
+        except Exception:
+            logger.exception('本地存储删除失败')
+            raise
 
     def _sync_exists(self, remote_path: str) -> bool:
         return os.path.exists(self._abs_path(remote_path))
@@ -65,8 +68,9 @@ class LocalStorageAdapter(BaseStorageAdapter):
         base_dir = self._abs_path(prefix) if prefix else self.root
         try:
             entries = os.scandir(base_dir)
-        except OSError as e:
-            raise CustomException(msg=f"本地存储列表失败: {e!s}")
+        except OSError:
+            logger.exception('本地存储列表失败')
+            raise
 
         result: list[StorageObject] = []
         for entry in entries:
@@ -92,21 +96,24 @@ class LocalStorageAdapter(BaseStorageAdapter):
     def _sync_mkdir(self, remote_dir: str) -> None:
         try:
             os.makedirs(self._abs_path(remote_dir), exist_ok=True)
-        except Exception as e:
-            raise CustomException(msg=f"本地存储创建目录失败: {e!s}")
+        except Exception:
+            logger.exception('本地存储创建目录失败')
+            raise
 
     def _sync_rmdir(self, remote_dir: str) -> None:
         try:
             os.rmdir(self._abs_path(remote_dir))
-        except Exception as e:
-            raise CustomException(msg=f"本地存储删除目录失败: {e!s}")
+        except Exception:
+            logger.exception('本地存储删除目录失败')
+            raise
 
     def _sync_rename(self, src: str, dst: str) -> None:
         try:
             os.makedirs(os.path.dirname(self._abs_path(dst)), exist_ok=True)
             shutil.move(self._abs_path(src), self._abs_path(dst))
-        except Exception as e:
-            raise CustomException(msg=f"本地存储重命名失败: {e!s}")
+        except Exception:
+            logger.exception('本地存储重命名失败')
+            raise
 
     def _sync_copy(self, src: str, dst: str) -> None:
         src_abs, dst_abs = self._abs_path(src), self._abs_path(dst)
@@ -116,5 +123,6 @@ class LocalStorageAdapter(BaseStorageAdapter):
             else:
                 os.makedirs(os.path.dirname(dst_abs), exist_ok=True)
                 shutil.copy2(src_abs, dst_abs)
-        except Exception as e:
-            raise CustomException(msg=f"本地存储复制失败: {e!s}")
+        except Exception:
+            logger.exception('本地存储复制失败')
+            raise

@@ -75,7 +75,7 @@ async def slider_complete_controller(
     redis: Annotated[Redis, Depends(redis_getter)],
     body: Annotated[SliderCompleteSchema, Body(description="滑块验证参数")],
 ) -> JSONResponse:
-    result: dict[str, Any] = await CaptchaService.slider_complete(redis=redis, request=request, captcha_key=body.captcha_key)
+    result: dict[str, Any] = await CaptchaService.slider_complete(redis=redis, request=request, captcha_key=body.captcha_key, position=body.position)
     return SuccessResponse(data=result, msg="滑块验证成功")
 
 
@@ -104,7 +104,7 @@ async def oauth_login_redirect_controller(
         provider=provider,
         redirect_uri=redirect_uri,
     )
-    return RedirectContentResponse(url=url, status_code=302)
+    return RedirectContentResponse(url, 302)
 
 
 @AuthRouter.get("/oauth/{provider}/callback", summary="第三方OAuth回调", include_in_schema=False)
@@ -125,7 +125,7 @@ async def oauth_callback_controller(
         code=code,
         state=state,
     )
-    return RedirectContentResponse(url=url, status_code=302)
+    return RedirectContentResponse(url, 302)
 
 
 # =================================================== #

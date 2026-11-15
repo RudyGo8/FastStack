@@ -277,7 +277,9 @@ class GenConstant:
             "timestamp without time zone": "DateTime",
             "interval": "Interval",
             "json": "JSON",
-            "jsonb": "JSONB",
+            # jsonb 使用基类的跨方言类型（PG → JSONB，SQLite/MySQL → JSON），
+            # 不再硬编码 JSONB：后者在非 PG 方言下无法渲染，且 JSONB 不在顶层 sqlalchemy 命名空间
+            "jsonb": "JSONType",
             "uuid": "Uuid",
             "inet": "INET",
             "cidr": "CIDR",
@@ -289,8 +291,8 @@ class GenConstant:
             "path": "Geometry",
             "polygon": "Geometry",
             "circle": "Geometry",
-            "bit": "Bit",
-            "bit varying": "Bit",
+            "bit": "BIT",
+            "bit varying": "BIT",
             "tsvector": "TSVECTOR",
             "tsquery": "TSQUERY",
             "xml": "String",

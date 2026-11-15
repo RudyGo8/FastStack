@@ -51,4 +51,8 @@ class HealthService:
             environment=settings.ENVIRONMENT.value,
             db_status=db_status,
             redis_status=redis_status,
+            # 升级可见性：这两个开关会静默改变行为（代码块任务不可调度 / 生产拒绝全部跨域），
+            # 在健康检查里显式暴露，避免运维只看到"任务不动了"而不知原因。
+            code_exec_enabled=settings.SCHEDULER_ALLOW_CODE_EXEC,
+            cors_origins_configured=bool(settings.PROD_CORS_ORIGINS) if settings.ENVIRONMENT.value == "prod" else True,
         )

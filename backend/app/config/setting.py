@@ -2,11 +2,12 @@ import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
-from urllib.parse import quote_plus
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.common.enums import EnvironmentEnum
+from app.config.db_url import build_redis_url, build_sqlalchemy_url
 from app.config.path_conf import ENV_DIR
 
 
@@ -54,7 +55,8 @@ class Settings(BaseSettings):
     # ================================================= #
     # ******************** 跨域配置 ******************** #
     # ================================================= #
-    PROD_CORS_ORIGINS: str = ""  # 生产环境允许的域名列表，逗号分隔，如 "https://admin.example.com,https://www.example.com"
+    PROD_CORS_ORIGINS: str = ""  # 生产环境允许的域名列表，逗号分隔，如 "https://admin.example.com,https://www.example.com"；生产留空=拒绝全部跨域请求
+    CORS_STRICT_STARTUP: bool = False  # True 时「生产未配置 PROD_CORS_ORIGINS」直接启动失败（默认只告警，保持向后兼容）
     ALLOW_METHODS: list[str] = ["*"]  # 允许的HTTP方法
     ALLOW_HEADERS: list[str] = ["*"]  # 允许的请求头
     ALLOW_CREDENTIALS: bool = True  # 是否允许携带cookie
@@ -122,9 +124,14 @@ class Settings(BaseSettings):
     CAPTCHA_MIN_VERIFY_SECONDS: float = 0.2
 
     # ================================================= #
+    # ******************** 时区配置 ******************** #
+    # ================================================= #
+    TIMEZONE: str = "Asia/Shanghai"  # 对外展示时区；数据库内部统一存 UTC
+
+    # ================================================= #
     # ******************* 任务调度配置 ****************** #
     # ================================================= #
-    SCHEDULER_ALLOW_CODE_EXEC: bool = True  # 是否允许定时任务执行用户提交的代码块(exec)。等同远程代码执行能力，生产环境强烈建议设为 False
+    SCHEDULER_ALLOW_CODE_EXEC: bool = False  # 是否允许定时任务执行用户提交的代码块(exec)。等同远程代码执行能力，默认关闭，仅在显式配置为 true 时启用
 
     # ================================================= #
     # ******************* 口令策略配置 ****************** #
@@ -147,7 +154,9 @@ class Settings(BaseSettings):
     OAUTH_QQ_APP_ID: str = ""
     OAUTH_QQ_APP_SECRET: str = ""
     OAUTH_STATE_TTL: int = 600  # OAuth state 参数过期时间（秒）
-    OAUTH_ALLOWED_HOSTS: list[str] = ["*"]
+    # 生产回跳域名白名单（**不再是通配符 "*"**）：OAuth 回调域名必须命中其中之一。
+    # 非生产环境通常用 localhost/容器域名登录，故默认一并放行本机与回环地址；生产可按需收敛。
+    OAUTH_ALLOWED_HOSTS: list[str] = ["service.fastapiadmin.com", "*.fastapiadmin.com", "localhost", "127.0.0.1", "[::1]"]
 
     # ================================================= #
     # *************** 微信小程序配置（可选）************** #
@@ -182,7 +191,12 @@ class Settings(BaseSettings):
     # ================================================= #
     # ******************* 安全中间件配置 ****************** #
     # ================================================= #
+
     ALLOWED_HOSTS: list[str] = ["localhost", "127.0.0.1"]  # 允许访问的主机名列表，生产部署改为自己的域名
+    # 容器内健康检查走 http://localhost:8001、本地直连调试都需要 Host: localhost/127.0.0.1/[::1]；
+    # 该放行范围由下面的开关控制——生产若不需要（例如健康检查改走 127.0.0.1 之外的内部域名）可置 False。
+    ALLOW_LOCALHOST_HOSTS: bool = True
+    LOCALHOST_HOSTS: list[str] = ["localhost", "127.0.0.1", "[::1]"]  # ALLOW_LOCALHOST_HOSTS=True 时自动并入 ALLOWED_HOSTS
 
     # 接口白名单（无需认证即可访问的接口路径，支持 * 开头表示前缀匹配）
     WHITE_API_LIST_PATH: list[str] = [
@@ -236,26 +250,82 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = ""
     OPENAI_BASE_URL: str = ""  # API Base URL，如 https://api.minimax.chat/v1
 
+    @model_validator(mode="after")
+    def _merge_localhost_hosts(self) -> "Settings":
+        """按开关把 localhost/回环地址并入 ALLOWED_HOSTS。
+
+        健康检查与本地联调需要 ``Host: localhost``；把它们做成可配置项（而不是无条件写死），
+        生产可以用 ``ALLOW_LOCALHOST_HOSTS=False`` 收敛 Host 头校验范围。
+
+        返回:
+        - Settings: 自身（pydantic after-validator 约定）。
+        """
+        if self.ALLOW_LOCALHOST_HOSTS:
+            for host in self.LOCALHOST_HOSTS:
+                if host not in self.ALLOWED_HOSTS:
+                    self.ALLOWED_HOSTS.append(host)
+        return self
+
     # ================================================= #
     # ******************* 动态配置 ******************* #
     # ================================================= #
     @property
     def ALLOW_ORIGINS(self) -> list[str]:
-        """根据环境动态返回 CORS 允许的域名列表。"""
-        if self.ENVIRONMENT == EnvironmentEnum.PROD and self.PROD_CORS_ORIGINS:
-            return [origin.strip() for origin in self.PROD_CORS_ORIGINS.split(",") if origin.strip()]
-        return ["*"]
+        """根据环境动态返回 CORS 允许的域名列表。
+
+        安全默认（见 backend/audit-security.md S9）：
+        - 非生产环境：返回 ``["*"]``，保留本地联调便利；
+        - 生产环境：只接受**显式配置**的域名清单。未配置、或清单里只有通配符 ``"*"`` 时返回空列表
+          （空列表 = 不下发任何跨域许可响应头；同源部署的 Web 端不受影响），并打 warning 提示运维配置。
+          历史行为是"未配置就回落 ``["*"]``"，叠加 ``ALLOW_CREDENTIALS=True`` 等价于允许任意站点
+          带凭据跨域访问。
+        """
+        if self.ENVIRONMENT != EnvironmentEnum.PROD:
+            return ["*"]
+
+        origins = [origin.strip() for origin in (self.PROD_CORS_ORIGINS or "").split(",") if origin.strip()]
+        if "*" in origins:
+            origins = [origin for origin in origins if origin != "*"]
+            self._warn_insecure_cors(
+                "生产环境 CORS 不允许通配符 '*'（与 ALLOW_CREDENTIALS=True 组合会放行任意站点带凭据跨域），已忽略该值；请显式配置 PROD_CORS_ORIGINS",
+            )
+        if not origins:
+            message = "生产环境未显式配置 PROD_CORS_ORIGINS，已按安全默认拒绝全部跨域请求（同源部署不受影响）；如需跨域请在 .env.prod 中配置 PROD_CORS_ORIGINS"
+            if self.CORS_STRICT_STARTUP:
+                # 严格模式：宁可启动失败，也不要带着"跨域被全量拒绝"的隐性配置上线
+                raise RuntimeError(f"CORS_STRICT_STARTUP=True 且 {message}")
+            self._warn_insecure_cors(message)
+        return origins
+
+    @staticmethod
+    def _warn_insecure_cors(message: str) -> None:
+        """输出安全告警（日志不可用时静默，绝不影响配置读取）。
+
+        参数:
+        - message (str): 告警内容。
+
+        返回:
+        - None
+        """
+        # 延迟导入：app.core.logger 会反向 import 本模块，模块级导入会形成循环依赖
+        try:
+            from app.core.logger import logger
+
+            logger.warning(message)
+        except Exception:  # noqa: BLE001 - 告警失败不得影响配置读取
+            pass
 
     # ================================================= #
     @property
     def REDIS_URI(self) -> str:
         """构建 Redis 连接 URI（供 slowapi / 其他模块复用）。"""
-        auth_part = ""
-        if self.REDIS_USER and self.REDIS_PASSWORD:
-            auth_part = f"{self.REDIS_USER}:{self.REDIS_PASSWORD}@"
-        elif self.REDIS_PASSWORD:
-            auth_part = f":{self.REDIS_PASSWORD}@"
-        return f"redis://{auth_part}{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB_NAME}"
+        return build_redis_url(
+            username=self.REDIS_USER,
+            password=self.REDIS_PASSWORD,
+            host=self.REDIS_HOST,
+            port=self.REDIS_PORT,
+            db=self.REDIS_DB_NAME,
+        )
 
     @property
     def MIDDLEWARE_LIST(self) -> list[str | None]:
@@ -275,9 +345,24 @@ class Settings(BaseSettings):
             raise ValueError(f"数据库驱动不支持: {self.DATABASE_TYPE}, 异步数据库请选择 mysql、postgres、sqlite")
         db_connect: str = ""
         if self.DATABASE_TYPE == "mysql":
-            db_connect = f"mysql+aiomysql://{self.DATABASE_USER}:{quote_plus(self.DATABASE_PASSWORD)}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}?charset=utf8mb4"
+            db_connect = build_sqlalchemy_url(
+                "mysql+aiomysql",
+                username=self.DATABASE_USER,
+                password=self.DATABASE_PASSWORD,
+                host=self.DATABASE_HOST,
+                port=self.DATABASE_PORT,
+                database=self.DATABASE_NAME,
+                query={"charset": "utf8mb4"},
+            )
         elif self.DATABASE_TYPE == "postgres":
-            db_connect = f"postgresql+asyncpg://{self.DATABASE_USER}:{quote_plus(self.DATABASE_PASSWORD)}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}"
+            db_connect = build_sqlalchemy_url(
+                "postgresql+asyncpg",
+                username=self.DATABASE_USER,
+                password=self.DATABASE_PASSWORD,
+                host=self.DATABASE_HOST,
+                port=self.DATABASE_PORT,
+                database=self.DATABASE_NAME,
+            )
         else:
             name = self.DATABASE_NAME if self.DATABASE_NAME.endswith(".db") else f"{self.DATABASE_NAME}.db"
             db_connect = f"sqlite+aiosqlite:///{name}"
@@ -289,9 +374,24 @@ class Settings(BaseSettings):
             raise ValueError(f"数据库驱动不支持: {self.DATABASE_TYPE}, 同步数据库请选择 mysql、postgres、sqlite")
         db_connect: str = ""
         if self.DATABASE_TYPE == "mysql":
-            db_connect = f"mysql+pymysql://{self.DATABASE_USER}:{quote_plus(self.DATABASE_PASSWORD)}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}?charset=utf8mb4"
+            db_connect = build_sqlalchemy_url(
+                "mysql+pymysql",
+                username=self.DATABASE_USER,
+                password=self.DATABASE_PASSWORD,
+                host=self.DATABASE_HOST,
+                port=self.DATABASE_PORT,
+                database=self.DATABASE_NAME,
+                query={"charset": "utf8mb4"},
+            )
         elif self.DATABASE_TYPE == "postgres":
-            db_connect = f"postgresql+psycopg://{self.DATABASE_USER}:{quote_plus(self.DATABASE_PASSWORD)}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}"
+            db_connect = build_sqlalchemy_url(
+                "postgresql+psycopg",
+                username=self.DATABASE_USER,
+                password=self.DATABASE_PASSWORD,
+                host=self.DATABASE_HOST,
+                port=self.DATABASE_PORT,
+                database=self.DATABASE_NAME,
+            )
         else:
             name = self.DATABASE_NAME if self.DATABASE_NAME.endswith(".db") else f"{self.DATABASE_NAME}.db"
             db_connect = f"sqlite:///{name}"
@@ -316,7 +416,7 @@ class Settings(BaseSettings):
                 404: {"description": "资源不存在"},
                 422: {"description": "请求参数验证错误"},
                 500: {"description": "服务器内部错误"},
-            }
+            },
         }
 
 
