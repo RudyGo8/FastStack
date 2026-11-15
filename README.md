@@ -1,7 +1,7 @@
 <div align="center">
   <img src="./frontend/web/public/logo.png" width="120" alt="logo" />
   <h1>FastStack</h1>
-  <p>个人全栈脚手架：FastAPI + Vue3 + MySQL + Redis + Milvus，前后端开箱即用。</p>
+  <p>个人全栈脚手架：FastAPI + Vue3 + PostgreSQL + pgvector + Redis，前后端开箱即用。</p>
 </div>
 
 基于开源项目 [FastapiAdmin](https://github.com/fastapiadmin/FastapiAdmin) 精简而来，MIT 协议。
@@ -13,7 +13,7 @@
 | 后端 | FastAPI · SQLAlchemy 2 · Alembic · Pydantic v2 · Redis · uv |
 | Web 前端 | Vue 3 · Vite · TypeScript · Element Plus · Tailwind 4 · Pinia |
 | 移动端 | uni-app · Vue 3 · TypeScript |
-| 基础设施 | MySQL 8 · Redis 7 · Milvus · MinIO · Docker Compose |
+| 基础设施 | PostgreSQL 18 · pgvector · Redis 7 · Docker Compose |
 
 ## 文档职责
 
@@ -48,7 +48,7 @@ cd frontend/web && pnpm test         # 前端测试
 | 后端接口 | `http://127.0.0.1:8001` |
 | Swagger | `http://127.0.0.1:8001/docs` |
 | Attu（Milvus 控制台） | `http://127.0.0.1:8082` |
-| MySQL / Redis | `127.0.0.1:3307` / `127.0.0.1:6380` |
+| PostgreSQL / Redis | `127.0.0.1:5434` / `127.0.0.1:6380` |
 
 默认账号 `super`、`admin`、`user`，密码均为 `123456`，部署后请立即修改。
 

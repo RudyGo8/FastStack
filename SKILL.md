@@ -31,18 +31,18 @@ description: "FastStack 操作手册：本地启动、数据库迁移、按范�
 | 生成物 | 来源模板 | 说明 |
 | --- | --- | --- |
 | `.env` | `.env.example` | 基础设施数据目录 |
-| `backend/env/.env.dev` | `backend/env/.env.example` | MySQL 3307 / Redis 6380 / 随机 SECRET_KEY |
+| `backend/env/.env.dev` | `backend/env/.env.example` | PostgreSQL 5434 / Redis 6380 / 随机 SECRET_KEY |
 | `frontend/web/.env.development` | `.env.development.example` | 前端代理目标 |
 
 ### 分别启动
 
 ```bash
-docker compose up -d                                    # MySQL:3307 / Redis:6380 / Milvus:19531
-cd backend && uv sync --extra mysql && uv run main.py run --env=dev
+docker compose up -d                                    # PostgreSQL:5434 / Redis:6380
+cd backend && uv sync --extra postgres && uv run main.py run --env=dev
 cd frontend/web && pnpm install && pnpm run dev         # http://127.0.0.1:5180
 ```
 
-`--extra mysql` 不能省。数据库驱动是可选 extra，裸 `uv sync` 装不出驱动，后端起不来。
+`--extra postgres` 不能省。数据库驱动是可选 extra，裸 `uv sync` 装不出驱动，后端起不来。
 
 ### 首次启动做了什么
 
@@ -67,7 +67,7 @@ uv run main.py upgrade --env=dev      # 应用到 head
 切换数据库类型只改 `backend/env/.env.dev` 的 `DATABASE_TYPE`（`mysql` / `postgres` / `sqlite`），并按类型安装对应 extra：
 
 ```bash
-uv sync --extra mysql      # 或 postgres / sqlite / all-db
+uv sync --extra postgres   # MySQL 用 mysql；另有 sqlite / all-db
 ```
 
 ---
@@ -84,7 +84,7 @@ uv run pytest tests/test_main.py::test_xxx -x   # 单用例，遇错即停
 uv run pytest -k "migration"                     # 按名字匹配
 ```
 
-`conftest.py` 会自建临时库并初始化数据，不需要预先起 MySQL。
+`conftest.py` 会自建临时库并初始化数据，不需要预先起数据库容器。
 
 ### Web 前端
 
@@ -134,7 +134,7 @@ rsync -a --delete frontend/app/dist/build/h5/ docker/nginx/app/dist/build/h5/
 ### 生产部署
 
 ```bash
-cp docker/.env.example docker/.env     # 首次：填 MySQL/Redis 密码
+cp docker/.env.example docker/.env     # 首次：填 PostgreSQL/Redis 密码
 ./deploy.sh
 ```
 
@@ -146,7 +146,7 @@ cp docker/.env.example docker/.env     # 首次：填 MySQL/Redis 密码
 
 | 现象 | 检查 |
 | --- | --- |
-| 后端起不来，报缺驱动 | 是否漏了 `uv sync --extra mysql` |
+| 后端起不来，报缺驱动 | 是否漏了 `uv sync --extra postgres`（MySQL 用 `--extra mysql`） |
 | `Address already in use` | `lsof -ti tcp:8001 \| xargs kill`（前端同理换 5180） |
 | 接口报列不存在 / 字段缺失 | 改了 model 没跑 `uv run main.py upgrade --env=dev` |
 | 新模块路由 404 | dev reload 只在文件变更时重载，动态路由发现只在启动时执行，**必须重启后端** |

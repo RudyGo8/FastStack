@@ -43,8 +43,10 @@
 
 ## 数据库
 
-- 驱动是可选 extra：`uv sync --extra mysql`（或 `postgres` / `sqlite` / `all-db`）。不带 `--extra` 启动会因为缺驱动失败。
-- `DATABASE_TYPE` 支持 `mysql` / `postgres` / `sqlite`；连接串由 `app/config/db_url.py` 统一拼装，不要在各处手写 URI。
+- 默认数据库是 PostgreSQL 18（`DATABASE_TYPE=postgres`），MySQL 仅作兼容保留。
+- 驱动是可选 extra：PostgreSQL 用 `uv sync --extra postgres`；MySQL 用 `mysql`，另有 `sqlite` / `all-db`。不带 `--extra` 启动会因为缺驱动失败。
+- 连接串由 `app/config/db_url.py` 统一拼装，不要在各处手写 URI。
+- 向量检索用 pgvector，由 `VECTOR_STORE_ENABLE` 控制：关闭时启动不建扩展、不建向量表，普通项目无需预装 pgvector。
 - **改了 ORM 模型必须生成并执行 Alembic 迁移**：`uv run main.py revision -m "..."` + `uv run main.py upgrade --env=dev`。
 - 种子数据在 `backend/sql/*.json`（菜单/角色/用户/字典/参数），由 `app/scripts/initialize.py` 在启动时导入。
 
