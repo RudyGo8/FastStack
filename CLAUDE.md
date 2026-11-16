@@ -59,6 +59,9 @@
 - 执行上下文走 `contracts.current_run`（ContextVar），禁止跨请求复用；恢复任务时身份由 `policy.load_principal` 重新加载，不信任任务快照。
 - Checkpoint 仅支持 PostgreSQL，落在独立 schema `ai_agent_checkpoint`；初始化为显式调用，服务启动不会建表。
 - 现有 Agno 聊天（`ai/chat`）保持独立，不与 Harness 混用；两者通过配置开关分别启用。
+- `app/modules/ai/rag/` 同样是通用层：向量表统一 `ai_*`，不复制任何业务表名或权限模型。
+- 向量检索仅在 `VECTOR_STORE_ENABLE=True` + PostgreSQL 下启用；维度由 `RAG_EMBEDDING_DIM` 决定，必须与表结构一致。
+- 所有向量读写都必须带 `tenant_id`，`VectorStore` 会对空租户直接报错。
 
 ## 鉴权
 

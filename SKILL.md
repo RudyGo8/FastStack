@@ -14,7 +14,8 @@ description: "FastStack 操作手册：本地启动、数据库迁移、按范�
 - [3. 测试](#3-测试)
 - [4. 构建与发布](#4-构建与发布)
 - [5. Agent Harness](#5-agent-harness)
-- [6. 排查](#6-排查)
+- [6. RAG 向量检索](#6-rag-向量检索)
+- [7. 排查](#7-排查)
 
 ---
 
@@ -180,7 +181,39 @@ MySQL / SQLite 不提供持久任务能力。
 
 ---
 
-## 6. 排查
+## 6. RAG 向量检索
+
+仅在 `VECTOR_STORE_ENABLE=True` 且 `DATABASE_TYPE=postgres` 时可用；未启用时启动不建表、不要求 pgvector。
+
+```bash
+# 1) 开启（backend/env/.env.dev）：会自动 CREATE EXTENSION IF NOT EXISTS vector
+VECTOR_STORE_ENABLE = True
+RAG_EMBEDDING_MODEL = text-embedding-3-small
+RAG_EMBEDDING_DIM = 1536          # 必须与 ai_vector_chunk.dense_embedding 维度一致
+
+# 2) 嵌入服务（OpenAI 兼容 /embeddings；留空复用 OPENAI_*）
+# RAG_EMBEDDING_BASE_URL = https://api.openai.com/v1
+# RAG_EMBEDDING_API_KEY  =
+
+# 3) 测试
+cd backend && uv run pytest tests/test_ai_rag.py -q
+```
+
+接口（权限 `module_ai:rag:*`）：
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/api/v1/ai/rag/document` | 文本入库（按文件名整篇替换） |
+| POST | `/api/v1/ai/rag/search` | 混合检索（向量 + 词项，RRF 融合） |
+| GET | `/api/v1/ai/rag/documents` | 已入库文档清单 |
+| DELETE | `/api/v1/ai/rag/document?filename=` | 删除文档及其分块 |
+
+`tenant_id` 提供项目/租户隔离，所有读写都强制带租户条件。
+表结构见 `app/modules/ai/rag/model.py`（`ai_vector_collection` / `ai_vector_chunk` / `ai_vector_parent_chunk`）。
+
+---
+
+## 7. 排查
 
 | 现象 | 检查 |
 | --- | --- |

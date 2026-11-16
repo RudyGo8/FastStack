@@ -271,6 +271,21 @@ class Settings(BaseSettings):
     AI_HARNESS_MCP_CONFIG: str = ""  # MCP 服务配置文件路径；留空用内置模板
     AI_HARNESS_TOOL_MAX_CONCURRENCY: int = 4  # 工具调用并发上限
 
+    # ================================================= #
+    # ******************* RAG 向量检索 ******************* #
+    # ================================================= #
+    # 总开关复用 VECTOR_STORE_ENABLE：关闭时不建向量表、不要求 pgvector
+    RAG_EMBEDDING_MODEL: str = "text-embedding-3-small"  # 嵌入模型标识
+    RAG_EMBEDDING_DIM: int = 1536  # 向量维度，必须与表结构一致
+    RAG_EMBEDDING_BASE_URL: str = ""  # 留空复用 OPENAI_BASE_URL
+    RAG_EMBEDDING_API_KEY: str = ""  # 留空复用 OPENAI_API_KEY
+    RAG_EMBEDDING_BATCH_SIZE: int = 10  # 单次嵌入请求的文本条数
+    RAG_TOP_K: int = 5  # 默认召回条数
+    RAG_CHUNK_SIZE: int = 800  # 子块目标字符数
+    RAG_CHUNK_OVERLAP: int = 100  # 子块重叠字符数
+    RAG_PARENT_CHUNK_SIZE: int = 2400  # 父块目标字符数
+    RAG_TENANT_ID: str = "default"  # 默认租户/项目隔离标识
+
     @model_validator(mode="after")
     def _merge_localhost_hosts(self) -> "Settings":
         """按开关把 localhost/回环地址并入 ALLOWED_HOSTS。

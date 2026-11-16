@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.modules.ai.chat.controller import ChatRouter
+from app.modules.ai.rag.controller import RagRouter
 from app.modules.common.file.controller import FileRouter
 from app.modules.ops.dbconsole.controller import DbConsoleRouter
 from app.modules.generator.gencode.controller import GenRouter
@@ -64,7 +65,7 @@ DOMAIN_CONTROLLERS: dict[str, list[APIRouter]] = {
         StorageTransferRouter,
         StorageWorkflowRouter,
     ],
-    "/ai": [ChatRouter],
+    "/ai": [ChatRouter, RagRouter],
     "/sop": [SopChatRouter, SopDocumentRouter],
     "/generator": [GenRouter],
     "/common": [FileRouter],
