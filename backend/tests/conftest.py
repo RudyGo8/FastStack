@@ -25,10 +25,15 @@ from fastapi.testclient import TestClient
 
 _TEST_DB_PATH = tempfile.NamedTemporaryFile(suffix=".db", delete=False).name
 
-os.environ["DATABASE_TYPE"] = "sqlite"
-os.environ["DATABASE_NAME"] = _TEST_DB_PATH
-os.environ["POOL_SIZE"] = "1"
-os.environ["MAX_OVERFLOW"] = "1"
+# 集成测试模式（AI_INTEGRATION_PG=1）沿用调用方提供的真实 PostgreSQL 配置，
+# 其余情况一律锁到临时 SQLite，保证单元测试不触碰任何真实数据库。
+_INTEGRATION_MODE = os.getenv("AI_INTEGRATION_PG") == "1"
+
+if not _INTEGRATION_MODE:
+    os.environ["DATABASE_TYPE"] = "sqlite"
+    os.environ["DATABASE_NAME"] = _TEST_DB_PATH
+    os.environ["POOL_SIZE"] = "1"
+    os.environ["MAX_OVERFLOW"] = "1"
 os.environ["SECRET_KEY"] = "unit-test-secret-key-not-a-real-secret"  # Settings 必填项，固定注入保证测试确定性
 
 # 迁移守卫快照：conftest import 时刻早于任何布局（init_db），供 test_migrations.py
@@ -39,10 +44,11 @@ _versions_before_layout: frozenset[str] = frozenset(p.name for p in ALEMBIC_VERS
 
 from app.config.setting import settings
 
-settings.DATABASE_TYPE = "sqlite"
-settings.DATABASE_NAME = _TEST_DB_PATH
-settings.POOL_SIZE = 1
-settings.MAX_OVERFLOW = 1
+if not _INTEGRATION_MODE:
+    settings.DATABASE_TYPE = "sqlite"
+    settings.DATABASE_NAME = _TEST_DB_PATH
+    settings.POOL_SIZE = 1
+    settings.MAX_OVERFLOW = 1
 settings.CAPTCHA_ENABLE = False  # 测试环境关闭验证码
 
 # ============================================================

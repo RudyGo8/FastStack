@@ -86,7 +86,17 @@ uv run pytest tests/test_main.py::test_xxx -x   # 单用例，遇错即停
 uv run pytest -k "migration"                     # 按名字匹配
 ```
 
-`conftest.py` 会自建临时库并初始化数据，不需要预先起数据库容器。
+集成测试（Checkpoint 落盘、任务租约与抢占）需要真实 PostgreSQL，默认跳过：
+
+```bash
+AI_INTEGRATION_PG=1 \
+DATABASE_TYPE=postgres DATABASE_HOST=127.0.0.1 DATABASE_PORT=5434 \
+DATABASE_USER=postgres DATABASE_PASSWORD=123456 DATABASE_NAME=faststack \
+uv run pytest tests/test_ai_integration.py -q
+```
+
+`conftest.py` 默认把单元测试锁到临时 SQLite 并初始化数据，不需要预先起数据库容器；
+只有 `AI_INTEGRATION_PG=1` 的集成测试才会连真实 PostgreSQL。
 
 ### Web 前端
 
