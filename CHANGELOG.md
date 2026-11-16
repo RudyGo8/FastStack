@@ -10,6 +10,12 @@
 - AI 管理模块重做：多会话流式问答面板、会话记录管理、知识库、模型与 Prompt 配置。
 - 新增 `stop.sh`，一条命令停止前后端与基础设施；`run.sh` 首次运行自动生成全部本地配置。
 
+### 新增（Agent Harness）
+
+- 引入通用 LangGraph Agent Harness：身份、预算、工具网关、审批、持久任务与执行追踪，与任何业务模块解耦。
+- 新增 `ai_agent_task` 任务队列表与 PostgreSQL 持久 Checkpoint（独立 schema `ai_agent_checkpoint`）。
+- 业务工具通过注册接口接入，框架不内置业务工具；有副作用的工具必须声明幂等键与审批要求。
+
 ### 变更
 
 - 数据库驱动改为按需安装（`uv sync --extra mysql`），不再默认全装。

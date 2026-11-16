@@ -1,0 +1,4 @@
+{
+  "_comment": "MCP 服务配置模板。仅在 AI_HARNESS_MCP_ENABLE=true 时加载；把本文件复制到 AI_HARNESS_MCP_CONFIG 指定的路径再填写真实服务。",
+  "mcpServers": {}
+}

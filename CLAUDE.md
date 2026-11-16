@@ -51,6 +51,15 @@
 - **改了 ORM 模型必须生成并执行 Alembic 迁移**：`uv run main.py revision -m "..."` + `uv run main.py upgrade --env=dev`。
 - 种子数据在 `backend/sql/*.json`（菜单/角色/用户/字典/参数），由 `app/scripts/initialize.py` 在启动时导入。
 
+## AI 与 Agent Harness
+
+- `app/modules/ai/harness/` 是**通用执行框架**，不得 import 任何业务模块（`app.modules.sop.*`、`app.modules.task.*` 等）。
+- 业务工具只能通过 `tools.register_tool` 注册接入，框架不内置业务工具；工具必须声明 `required_permissions` 与 `side_effect`。
+- 有副作用的工具必须同时声明幂等键与审批要求，否则网关直接拒绝调用。
+- 执行上下文走 `contracts.current_run`（ContextVar），禁止跨请求复用；恢复任务时身份由 `policy.load_principal` 重新加载，不信任任务快照。
+- Checkpoint 仅支持 PostgreSQL，落在独立 schema `ai_agent_checkpoint`；初始化为显式调用，服务启动不会建表。
+- 现有 Agno 聊天（`ai/chat`）保持独立，不与 Harness 混用；两者通过配置开关分别启用。
+
 ## 鉴权
 
 - 权限标识为三段式 `模块:资源:操作`（如 `module_ai:chat:query`），前后端必须完全一致。

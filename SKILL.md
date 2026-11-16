@@ -13,7 +13,8 @@ description: "FastStack 操作手册：本地启动、数据库迁移、按范�
 - [2. 数据库迁移](#2-数据库迁移)
 - [3. 测试](#3-测试)
 - [4. 构建与发布](#4-构建与发布)
-- [5. 排查](#5-排查)
+- [5. Agent Harness](#5-agent-harness)
+- [6. 排查](#6-排查)
 
 ---
 
@@ -142,7 +143,44 @@ cp docker/.env.example docker/.env     # 首次：填 PostgreSQL/Redis 密码
 
 ---
 
-## 5. 排查
+## 5. Agent Harness
+
+LangGraph 持久任务体系默认关闭，且仅在 `DATABASE_TYPE=postgres` 时可用。
+
+```bash
+# 1) 开启（backend/env/.env.dev）
+AI_HARNESS_ENABLE = True
+
+# 2) 首次使用前显式初始化 Checkpoint schema（服务启动不会自动建表）
+cd backend && uv run python -c "
+import asyncio
+from app.modules.ai.harness.checkpoint import initialize_checkpoint_schema
+asyncio.run(initialize_checkpoint_schema())
+"
+
+# 3) 跑最小示例（需配置 OPENAI_API_KEY / OPENAI_MODEL）
+uv run python -m app.modules.ai.harness.example
+
+# 4) 测试
+uv run pytest tests/test_ai_harness.py -q
+```
+
+业务工具必须通过注册接口接入，框架不内置任何业务工具：
+
+```python
+from app.modules.ai.harness.tools import register_tool
+
+@register_tool("my_tool", description="做什么", required_permissions=frozenset({"module_x:y:query"}))
+async def my_tool(param: str) -> str:
+    ...
+```
+
+Checkpoint 落在独立 schema `ai_agent_checkpoint`，与业务表、RAG 向量数据互不干扰。
+MySQL / SQLite 不提供持久任务能力。
+
+---
+
+## 6. 排查
 
 | 现象 | 检查 |
 | --- | --- |

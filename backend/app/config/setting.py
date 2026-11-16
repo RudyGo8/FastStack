@@ -253,6 +253,24 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = ""
     OPENAI_BASE_URL: str = ""  # API Base URL，如 https://api.minimax.chat/v1
 
+    # ================================================= #
+    # ************** LangGraph Agent Harness ************** #
+    # ================================================= #
+    AI_HARNESS_ENABLE: bool = False  # 是否启用持久任务体系（依赖 PostgreSQL Checkpoint）
+    AI_HARNESS_MAX_MODEL_CALLS: int = 12  # 单任务模型调用上限
+    AI_HARNESS_MAX_TOOL_CALLS: int = 24  # 单任务工具调用上限
+    AI_HARNESS_MAX_STEPS: int = 24  # 单任务步骤上限
+    AI_HARNESS_MAX_TOKENS: int = 64000  # 单任务 Token 上限
+    AI_HARNESS_TIMEOUT_SECONDS: float = 180  # 单任务总时长上限（秒）
+    AI_HARNESS_OUTPUT_TOKENS: int = 2048  # 单次模型输出上限
+    AI_HARNESS_CONTEXT_TOKENS: int = 32000  # 上下文预算上限
+    AI_HARNESS_TOOL_TIMEOUT_SECONDS: float = 30  # 单次工具调用超时
+    AI_HARNESS_MAX_DEPTH: int = 1  # 子 Agent 递归深度上限
+    AI_HARNESS_CHECKPOINT_SCHEMA: str = "ai_agent_checkpoint"  # Checkpoint 独立 schema
+    AI_HARNESS_MCP_ENABLE: bool = False  # 是否发现并接入 MCP 工具
+    AI_HARNESS_MCP_CONFIG: str = ""  # MCP 服务配置文件路径；留空用内置模板
+    AI_HARNESS_TOOL_MAX_CONCURRENCY: int = 4  # 工具调用并发上限
+
     @model_validator(mode="after")
     def _merge_localhost_hosts(self) -> "Settings":
         """按开关把 localhost/回环地址并入 ALLOWED_HOSTS。
