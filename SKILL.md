@@ -23,7 +23,7 @@ description: "FastStack 操作手册：本地启动、数据库迁移、按范�
 
 ```bash
 ./run.sh          # docker 基础设施 + 后端热重载 + 前端 Vite
-./stop.sh         # 停止前后端 + 基础设施（数据保留在 volumes/）
+./stop.sh         # 停止前后端 + 基础设施（数据保留在 docker/volumes/dev/）
 ```
 
 首次执行会自动生成三份本地配置，无需手工准备：
@@ -37,7 +37,7 @@ description: "FastStack 操作手册：本地启动、数据库迁移、按范�
 ### 分别启动
 
 ```bash
-docker compose up -d                                    # PostgreSQL:5434 / Redis:6380
+docker compose up -d                                    # PostgreSQL:5434 / Redis:6380（数据落 docker/volumes/dev/）
 cd backend && uv sync --extra postgres && uv run main.py run --env=dev
 cd frontend/web && pnpm install && pnpm run dev         # http://127.0.0.1:5180
 ```

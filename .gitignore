@@ -54,6 +54,7 @@ backend/env/.env.test
 /.env
 docker/.env
 volumes/
+docker/volumes/
 docker/nginx/ssl/*
 !docker/nginx/ssl/.gitkeep
 

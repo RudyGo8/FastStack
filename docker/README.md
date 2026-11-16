@@ -13,20 +13,17 @@ docker/
 │   ├── ssl/                # SSL 证书目录（放置 server.key / server.pem，.gitignore 已排除）
 │   ├── web/                # Web 前端静态文件（构建后手动同步 dist/）
 │   └── app/ + docs/        # 移动端 H5 / 文档站点（按需启用）
-├── mysql/                  # MySQL 持久化 & 初始化
-│   ├── init/               # 首次启动时执行的 SQL 脚本（可选）
-│   └── data/               # 数据库数据文件（自动生成）
-├── redis/                  # Redis 持久化 & 配置
-│   ├── conf/
-│   │   └── redis.conf      # Redis 持久化配置文件
-│   └── data/               # Redis 数据文件（自动生成）
-├── docker-compose.yaml     # Docker Compose 编排文件
-├── .env                    # 环境变量配置文件（.gitignore 已排除）
+├── compose.dev.yaml        # 开发环境基础设施（PostgreSQL/Redis，由根 run.sh 调用）
+├── docker-compose.yaml     # 生产全栈编排（postgres / redis / backend / nginx）
+├── volumes/                # 数据目录（.gitignore 已排除）
+│   ├── dev/                # 开发数据：postgres/ redis/（以及按需的 mysql/ milvus/）
+│   └── prod/               # 生产数据根目录（DATA_DIR）：postgres/ redis/ uploads/ logs/
+├── .env                    # 生产环境变量（.gitignore 已排除）
 ├── .env.example            # 环境变量示例文件
 └── README.md               # 本文档
 ```
 
-> `.gitkeep` 仅用于保留空目录结构，不包含任何实际内容。
+> 数据默认落在 `docker/volumes/`。生产环境建议在 `docker/.env` 里把 `DATA_DIR` 改成仓库外的绝对路径（如 `/data/faststack/prod`），与发布文件彻底隔离。
 
 ## 部署准备
 
@@ -49,16 +46,20 @@ docker/
 
    | 变量 | 必填 | 默认值 | 说明 |
    |------|------|--------|------|
-   | `MYSQL_ROOT_PASSWORD` | 是 | - | MySQL root 密码 |
-   | `MYSQL_DATABASE` | 否 | `faststack` | 数据库名 |
-   | `MYSQL_USER` | 否 | `faststack` | 数据库用户 |
-   | `MYSQL_PASSWORD` | 是 | - | 数据库密码 |
+   | `DATA_DIR` | 否 | `./volumes/prod` | 生产数据根目录（数据库/Redis/上传/日志） |
+   | `DATABASE_USER` | 是 | - | PostgreSQL 用户 |
+   | `DATABASE_PASSWORD` | 是 | - | PostgreSQL 密码 |
+   | `DATABASE_NAME` | 否 | `faststack` | 数据库名 |
+   | `DATABASE_PORT` | 否 | `5432` | 数据库宿主机端口（仅绑定 127.0.0.1） |
+   | `VECTOR_STORE_ENABLE` | 否 | `false` | 是否启用 pgvector 向量检索 |
    | `REDIS_PASSWORD` | 是 | - | Redis 密码 |
    | `BACKEND_PORT` | 否 | `8001` | 后端服务宿主机端口 |
    | `HTTP_PORT` | 否 | `80` | HTTP 宿主机端口 |
    | `HTTPS_PORT` | 否 | `443` | HTTPS 宿主机端口 |
    | `DEPLOY_ENV` | 否 | `prod` | 部署环境（dev/prod） |
-   | `BACKEND_IMAGE_TAG` | 否 | `3.0.0` | 后端镜像标签 |
+   | `BACKEND_IMAGE_TAG` | 否 | `0.1.0` | 后端镜像标签 |
+
+   > 仍使用 MySQL 的存量项目：`docker compose --profile legacy-mysql up -d`，并在 `backend/env/.env.prod` 里把 `DATABASE_TYPE` 设为 `mysql`。
 
 2. **SSL 证书配置**（可选，但生产环境必须）
 
@@ -135,7 +136,7 @@ docker compose up -d --no-deps --build [service_name]
 
 | 服务 | CPU 限制 | 内存限制 | 内存预留 |
 |------|----------|----------|----------|
-| MySQL | 无限制 | 1 GB | 256 MB |
+| PostgreSQL | 无限制 | 1 GB | 256 MB |
 | Redis | 无限制 | 512 MB | 128 MB |
 | Backend | 1 核 | 1 GB | 256 MB |
 | Nginx | 0.5 核 | 256 MB | 64 MB |
@@ -152,7 +153,7 @@ docker compose up -d --no-deps --build [service_name]
 cd docker
 docker compose logs -f [服务名]
 
-# 服务名：backend, nginx, mysql, redis
+# 服务名：postgres, redis, backend, nginx
 ```
 
 各容器的日志会被 Docker 自动轮转，限制为每个容器最多保留 3 个日志文件，每个最大 10MB。可在 `docker-compose.yaml` 中调整 `logging` 配置。
@@ -177,7 +178,7 @@ rsync -a --delete dist/ ../../docker/nginx/web/dist/
 2. **使用正规 SSL 证书**：将 CA 签发的证书替换 `nginx/ssl/` 下的文件
 3. **修改域名**：在 `nginx/nginx.conf` 中修改 `server_name`
 4. **关闭调试**：确保 `.env` 中 `DEPLOY_ENV=prod`
-5. **限制数据库端口**：生产环境建议注释 MySQL/Redis 的 `ports` 映射，仅通过容器内部网络访问
+5. **限制数据库端口**：数据库与 Redis 的 `ports` 默认只绑定 `127.0.0.1`，不要改成对公网开放
 
 ## 常见问题
 
@@ -186,10 +187,10 @@ rsync -a --delete dist/ ../../docker/nginx/web/dist/
 | 环境变量文件不存在 | 部署脚本会自动从 `.env.example` 创建，或手动 `cp docker/.env.example docker/.env` |
 | 前端构建失败 | 建议在本地构建前端，将 `dist` 目录复制到 `docker/nginx/web/` 目录 |
 | 容器启动失败 | `cd docker && docker compose logs [服务名]` 查看具体错误 |
-| 数据库连接失败 | 确保 `.env` 中数据库配置正确，MySQL 容器正常运行 |
+| 数据库连接失败 | 确保 `.env` 中 `DATABASE_*` 正确，`postgres` 容器健康 |
 | 端口冲突 | 修改 `.env` 中的端口配置，重新部署 |
-| MySQL 数据目录权限问题 | `sudo chown -R 999:999 docker/mysql/data && sudo chmod -R 755 docker/mysql/data` |
-| 后端健康检查失败 | 确保 MySQL 和 Redis 容器已就绪，查看后端日志：`docker compose logs backend` |
+| PostgreSQL 数据目录权限问题 | 数据目录属主必须是容器内 postgres 用户（UID 999），不要用宿主机用户改属主 |
+| 后端健康检查失败 | 确保 postgres 和 redis 容器已就绪，查看后端日志：`docker compose logs backend` |
 
 ## 安全建议
 

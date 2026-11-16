@@ -15,8 +15,8 @@ done
 [ "$stopped" -eq 0 ] && echo "  没有在运行的前后端进程"
 
 echo "[2/2] 停止 docker 基础设施..."
-docker compose stop
+docker compose -p faststack-dev --project-directory docker -f docker/compose.dev.yaml stop
 
 echo ""
-echo "已停止。数据保留在 volumes/"
-echo "彻底清除: docker compose down -v && rm -rf volumes"
+echo "已停止。数据保留在 docker/volumes/dev/"
+echo "彻底清除: docker compose -p faststack-dev --project-directory docker -f docker/compose.dev.yaml down -v && rm -rf docker/volumes/dev"

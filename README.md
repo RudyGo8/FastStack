@@ -59,9 +59,10 @@ cd frontend/web && pnpm test         # 前端测试
 | `backend/` | FastAPI 服务，业务模块在 `app/modules/` |
 | `frontend/web/` | Vue3 管理后台 |
 | `frontend/app/` | uni-app 移动端 |
-| `docker/` | 生产部署配置（compose + nginx + Dockerfile） |
-| `docker-compose.yaml` | 本地开发基础设施 |
-| `volumes/` | 本地数据目录（不提交 Git） |
+| `docker/` | 部署配置：`compose.dev.yaml`（开发）、`docker-compose.yaml`（生产） |
+| `docker-compose.yaml` | 开发基础设施的兼容入口，等价于 `docker/compose.dev.yaml` |
+| `docker/volumes/dev/` | 开发数据（PostgreSQL/Redis，不提交 Git） |
+| `docker/volumes/prod/` | 生产数据根目录 `DATA_DIR`，与仓库和发布文件隔离 |
 
 ## 版本
 

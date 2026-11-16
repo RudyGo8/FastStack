@@ -38,7 +38,9 @@ load_env() {
 }
 
 check_deps() {
-    for dir in "${DOCKER_DIR}/mysql/data" "${DOCKER_DIR}/redis/data" "${DOCKER_DIR}/mysql/init" "${DOCKER_DIR}/redis/conf" "${WORK_DIR}/backend/static/upload"; do
+    # 数据目录由 DATA_DIR 决定；仅创建宿主侧需要的目录，不触碰已有数据
+    local data_dir="${DATA_DIR:-${DOCKER_DIR}/volumes/prod}"
+    for dir in "${data_dir}/postgres" "${data_dir}/redis" "${data_dir}/uploads" "${data_dir}/logs"; do
         [ -d "$dir" ] || mkdir -p "$dir"
     done
     local missing=()
@@ -77,9 +79,9 @@ start_service() {
     cd "${DOCKER_DIR}"
     docker compose up -d --force-recreate || { log "容器启动失败" "ERROR"; exit 1; }
     log "⏳ 等待服务就绪..."
-    for i in $(seq 1 30); do
-        if docker compose ps mysql --format '{{.Status}}' 2>/dev/null | grep -q "healthy"; then
-            log "✅ MySQL 已就绪" "SUCCESS"; break
+    for i in $(seq 1 60); do
+        if docker compose ps postgres --format '{{.Status}}' 2>/dev/null | grep -q "healthy"; then
+            log "✅ PostgreSQL 已就绪" "SUCCESS"; break
         fi
         sleep 2
     done
@@ -102,7 +104,7 @@ show_logs() {
 
 verify() {
     local ok=true
-    for svc in mysql redis backend nginx; do
+    for svc in postgres redis backend nginx; do
         local st=$(docker compose ps "$svc" --format '{{.Status}}' 2>/dev/null || echo "not found")
         if echo "$st" | grep -qE "Up|healthy"; then
             log "✅ $svc: $st" "SUCCESS"

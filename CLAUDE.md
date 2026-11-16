@@ -22,7 +22,8 @@
 | `docker/` | 生产部署（compose + nginx + Dockerfile） |
 | `docs/` | 技术规范与计划；一次性报告归档到 `docs/history/` |
 
-根目录 `docker-compose.yaml` 只起本地开发基础设施；`docker/docker-compose.yaml` 是全栈生产部署。
+本地开发基础设施在 `docker/compose.dev.yaml`（数据落 `docker/volumes/dev/`），根目录 `docker-compose.yaml` 是它的兼容入口；
+生产全栈部署在 `docker/docker-compose.yaml`，数据落 `DATA_DIR`（默认 `docker/volumes/prod/`）。
 
 ## 后端模块边界
 

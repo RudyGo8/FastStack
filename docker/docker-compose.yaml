@@ -1,40 +1,37 @@
 # ============================================
-# FastStack Docker Compose 配置文件
-# ============================================
+# FastStack 生产全栈 Compose
 # 使用方式:
-#   开发环境: docker compose --env-file .env up -d
-#   生产环境: docker compose --env-file .env -f docker-compose.yaml up -d
+#   cp .env.example .env && 编辑 .env
+#   ../deploy.sh             （推荐，会做前置检查）
+#   或 docker compose --env-file .env up -d
+# 数据统一落在 DATA_DIR（默认 ./volumes/prod），与仓库和发布文件隔离
 # ============================================
 
 services:
   # ==================== 数据库服务 ====================
-  mysql:
-    container_name: mysql
-    image: mysql:8.0
+  postgres:
+    container_name: faststack-postgres
+    image: pgvector/pgvector:pg18
     restart: unless-stopped
-    platform: linux/amd64
     environment:
       TZ: "Asia/Shanghai"
-      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:?错误: 请设置 MYSQL_ROOT_PASSWORD 环境变量}"
-      MYSQL_DATABASE: "${MYSQL_DATABASE:-faststack}"
-      MYSQL_USER: "${MYSQL_USER:-faststack}"
-      MYSQL_PASSWORD: "${MYSQL_PASSWORD:?错误: 请设置 MYSQL_PASSWORD 环境变量}"
+      POSTGRES_USER: "${DATABASE_USER:?错误: 请设置 DATABASE_USER 环境变量}"
+      POSTGRES_PASSWORD: "${DATABASE_PASSWORD:?错误: 请设置 DATABASE_PASSWORD 环境变量}"
+      POSTGRES_DB: "${DATABASE_NAME:-faststack}"
     ports:
-      - "${MYSQL_PORT:-3306}:3306"
+      - "127.0.0.1:${DATABASE_PORT:-5432}:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      # PostgreSQL 18 的 PGDATA 位于 /var/lib/postgresql/18/docker，挂载父目录
+      - "${DATA_DIR:-./volumes/prod}/postgres:/var/lib/postgresql"
       - /etc/localtime:/etc/localtime:ro
-      # 首次启动时自动执行 init SQL 脚本
-      - ./mysql/init:/docker-entrypoint-initdb.d:ro
     networks:
       - app_network
     healthcheck:
-      test:
-        ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 10s
-      retries: 10
-      start_period: 30s
+      retries: 12
+      start_period: 20s
     logging:
       driver: "json-file"
       options:
@@ -47,19 +44,41 @@ services:
         reservations:
           memory: 256m
 
+  # MySQL 兼容栈：仅存量 MySQL 项目需要时启用
+  mysql:
+    profiles: ["legacy-mysql"]
+    container_name: faststack-mysql
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      TZ: "Asia/Shanghai"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:?错误: 请设置 MYSQL_ROOT_PASSWORD 环境变量}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-faststack}"
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - "${DATA_DIR:-./volumes/prod}/mysql:/var/lib/mysql"
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
   # ==================== Redis 服务 ====================
   redis:
-    container_name: redis
+    container_name: faststack-redis
     image: redis:7-alpine
     restart: unless-stopped
-    platform: linux/amd64
     environment:
       TZ: "Asia/Shanghai"
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
-      - redis_data:/data
-      # 挂载自定义 redis.conf（若存在则覆盖默认配置）
+      - "${DATA_DIR:-./volumes/prod}/redis:/data"
       - ./redis/conf/redis.conf:/usr/local/etc/redis/redis.conf:ro
     command: >
       redis-server /usr/local/etc/redis/redis.conf
@@ -67,8 +86,7 @@ services:
     networks:
       - app_network
     healthcheck:
-      test:
-        ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -87,49 +105,43 @@ services:
 
   # ==================== 后端服务 ====================
   backend:
-    container_name: backend
+    container_name: faststack-backend
     build:
       context: ../
       dockerfile: ./docker/backend/Dockerfile
       args:
         DEPLOY_ENV: "${DEPLOY_ENV:-prod}"
-    image: "backend:${BACKEND_IMAGE_TAG:-3.0.0}"
+    image: "faststack-backend:${BACKEND_IMAGE_TAG:-0.1.0}"
     restart: unless-stopped
-    platform: linux/amd64
     environment:
       TZ: "Asia/Shanghai"
       # 运行环境，对应 backend/env/.env.{dev,prod}
       ENVIRONMENT: "${DEPLOY_ENV:-prod}"
-      # MySQL 连接配置
-      DATABASE_HOST: "mysql"
-      DATABASE_PORT: "3306"
-      DATABASE_USER: "${MYSQL_USER:-faststack}"
-      DATABASE_PASSWORD: "${MYSQL_PASSWORD:?错误: 请设置 MYSQL_PASSWORD 环境变量}"
-      DATABASE_NAME: "${MYSQL_DATABASE:-faststack}"
-      # Redis 连接配置
+      DATABASE_TYPE: "postgres"
+      DATABASE_HOST: "postgres"
+      DATABASE_PORT: "5432"
+      DATABASE_USER: "${DATABASE_USER}"
+      DATABASE_PASSWORD: "${DATABASE_PASSWORD}"
+      DATABASE_NAME: "${DATABASE_NAME:-faststack}"
+      # 向量检索：需要 pgvector 时在 .env 里设为 true
+      VECTOR_STORE_ENABLE: "${VECTOR_STORE_ENABLE:-false}"
       REDIS_HOST: "redis"
       REDIS_PORT: "6379"
       REDIS_PASSWORD: "${REDIS_PASSWORD}"
       REDIS_DB_NAME: "1"
       REDIS_ENABLE: "true"
-      # 日志级别
       LOGGER_LEVEL: "${LOGGER_LEVEL:-INFO}"
       # 信任反向代理（nginx）传来的 X-Forwarded-Proto/For：否则 prod 的
       # HTTPSRedirectMiddleware 会把 https 请求误判为 http 造成 301 循环
       FORWARDED_ALLOW_IPS: "*"
     ports:
-      - "${BACKEND_PORT:-8001}:8001"
+      - "127.0.0.1:${BACKEND_PORT:-8001}:8001"
     volumes:
-      # ── 开发热更新（可选）─────────────────────
-      # 取消注释将宿主机代码覆盖容器内代码。生产环境保持注释，
-      # 使用镜像内自带的代码（Dockerfile 已 COPY backend）。
-      # ─────────────────────────────────────────
-      # - ../backend:/home
-      # 本地存储源根目录持久化（种子节点 host=static/upload）：
-      # 必须挂载，否则每次部署重建容器会丢失用户上传的文件
-      - ./backend/static/upload:/home/static/upload
+      # 用户上传文件持久化（种子节点 host=static/upload），必须挂载
+      - "${DATA_DIR:-./volumes/prod}/uploads:/home/static/upload"
+      - "${DATA_DIR:-./volumes/prod}/logs:/home/logs"
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -160,10 +172,9 @@ services:
 
   # ==================== Nginx 服务 ====================
   nginx:
-    container_name: nginx
+    container_name: faststack-nginx
     image: nginx:1.25-alpine
     restart: unless-stopped
-    platform: linux/amd64
     environment:
       TZ: "Asia/Shanghai"
     ports:
@@ -197,21 +208,6 @@ services:
           cpus: "0.5"
         reservations:
           memory: 64m
-
-# ==================== 持久化卷 ====================
-volumes:
-  mysql_data:
-    driver: local
-    driver_opts:
-      type: none
-      device: ./mysql/data
-      o: bind
-  redis_data:
-    driver: local
-    driver_opts:
-      type: none
-      device: ./redis/data
-      o: bind
 
 # ==================== 网络 ====================
 networks:
